@@ -7,15 +7,21 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
+type entry struct {
+	value     string
+	expiresAt time.Time
+}
+
 type database struct {
-	data map[string]string
+	data map[string]entry
 }
 
 func main() {
 	db := &database{
-		data: make(map[string]string),
+		data: make(map[string]entry),
 	}
 
 	lc := net.ListenConfig{}
@@ -70,29 +76,61 @@ func (db *database) runConnection(c net.Conn) {
 	}
 }
 
+//nolint:gocognit // Will refactor command handling in future iterations, so keeping it simple for now
 func (db *database) generateResponse(buf []byte) []byte {
 	args, err := parseCommand(buf)
 	if err != nil {
 		return []byte("-ERR invalid command format\r\n")
 	}
+	if len(args) == 0 {
+		return []byte("-ERR empty command\r\n")
+	}
 	// PING (transform to lowercase for simplicity)
-	if len(args) == 1 && strings.ToLower(args[0]) == "ping" {
+	if strings.ToLower(args[0]) == "ping" && len(args) == 1 {
 		return []byte("+PONG\r\n")
 	}
 	// ECHO
-	if len(args) == 2 && strings.ToLower(args[0]) == "echo" {
+	if strings.ToLower(args[0]) == "echo" && len(args) == 2 {
 		return []byte("$" + strconv.Itoa(len(args[1])) + "\r\n" + args[1] + "\r\n")
 	}
-	if len(args) == 3 && strings.ToLower(args[0]) == "set" {
-		db.data[args[1]] = args[2]
+	// SET and GET
+	if strings.ToLower(args[0]) == "set" && len(args) == 3 {
+		db.data[args[1]] = entry{value: args[2]}
 		return []byte("+OK\r\n")
 	}
-	if len(args) == 2 && strings.ToLower(args[0]) == "get" {
+	if strings.ToLower(args[0]) == "set" && len(args) == 5 && strings.ToLower(args[3]) == "px" {
+		px, err := strconv.Atoi(args[4])
+		if err != nil {
+			return []byte("-ERR invalid PX value\r\n")
+		}
+		db.data[args[1]] = entry{
+			value:     args[2],
+			expiresAt: time.Now().Add(time.Duration(px) * time.Millisecond),
+		}
+		return []byte("+OK\r\n")
+	}
+	if strings.ToLower(args[0]) == "set" && len(args) == 5 && strings.ToLower(args[3]) == "ex" {
+		ex, err := strconv.Atoi(args[4])
+		if err != nil {
+			return []byte("-ERR invalid EX value\r\n")
+		}
+		db.data[args[1]] = entry{
+			value:     args[2],
+			expiresAt: time.Now().Add(time.Duration(ex) * time.Second),
+		}
+		return []byte("+OK\r\n")
+	}
+	if strings.ToLower(args[0]) == "get" && len(args) == 2 {
 		val, ok := db.data[args[1]]
 		if !ok {
 			return []byte("$-1\r\n") // nil response
 		}
-		return []byte("$" + strconv.Itoa(len(val)) + "\r\n" + val + "\r\n")
+		// check if the key has expired
+		if !val.expiresAt.IsZero() && time.Now().After(val.expiresAt) {
+			delete(db.data, args[1])
+			return []byte("$-1\r\n") // nil response
+		}
+		return []byte("$" + strconv.Itoa(len(val.value)) + "\r\n" + val.value + "\r\n")
 	}
 	// unknown command
 	return []byte("-ERR unknown command\r\n")
