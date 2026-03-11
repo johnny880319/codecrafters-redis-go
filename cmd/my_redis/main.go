@@ -30,29 +30,33 @@ func main() {
 		}
 
 		go func(c net.Conn) {
-			defer func() {
-				err := c.Close()
-				if err != nil {
-					fmt.Println("Error closing connection: ", err.Error())
-				}
-			}()
-
-			buf := make([]byte, 1024)
-			for {
-				n, err := c.Read(buf)
-				if err != nil {
-					fmt.Println("Error reading from connection: ", err.Error())
-					return
-				}
-				fmt.Println("Received", n, "bytes: ", string(buf[:n]))
-				n, err = c.Write(generateResponse(buf[:n]))
-				if err != nil {
-					fmt.Println("Error writing to connection: ", err.Error())
-					return
-				}
-				fmt.Println("Sent", n, "bytes")
-			}
+			runConnection(c)
 		}(conn)
+	}
+}
+
+func runConnection(c net.Conn) {
+	defer func() {
+		err := c.Close()
+		if err != nil {
+			fmt.Println("Error closing connection: ", err.Error())
+		}
+	}()
+
+	buf := make([]byte, 1024)
+	for {
+		n, err := c.Read(buf)
+		if err != nil {
+			fmt.Println("Error reading from connection: ", err.Error())
+			return
+		}
+		fmt.Println("Received", n, "bytes: ", string(buf[:n]))
+		n, err = c.Write(generateResponse(buf[:n]))
+		if err != nil {
+			fmt.Println("Error writing to connection: ", err.Error())
+			return
+		}
+		fmt.Println("Sent", n, "bytes")
 	}
 }
 
@@ -65,5 +69,6 @@ func generateResponse(buf []byte) []byte {
 	if len(buf) > 0 && string(buf[:14]) == "*2\r\n$4\r\nECHO\r\n" {
 		return buf[14:]
 	}
+	// unknown command
 	return []byte("-ERR unknown command\r\n")
 }

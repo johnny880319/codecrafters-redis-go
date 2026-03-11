@@ -1,13 +1,11 @@
 # NOTE:
-# These hooks assume a monorepo layout with `python/`, `go/`, and `typescript/` folders.
-# If you rename folders or flatten language code to repository root, update each `root:` path below.
+# Hooks are configured for this Go repository root.
 
 pre-commit:
   parallel: true
   commands:
     # go
     go-lint-typecheck:
-      root: "./"
       glob: "**/*.go"
       run: golangci-lint run --fix
       stage_fixed: true
@@ -18,6 +16,5 @@ pre-push:
   commands:
     # go
     go-test:
-      root: "./"
       glob: "**/*.go"
       run: go test -short ./...
