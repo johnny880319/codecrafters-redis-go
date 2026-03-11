@@ -1,28 +1,32 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"os"
 )
 
 func main() {
-	// You can use print statements as follows for debugging, they'll be visible when running tests.
-	fmt.Println("Logs from your program will appear here!")
+	lc := net.ListenConfig{}
 
-	// Uncomment the code below to pass the first stage
-
-	l, err := net.Listen("tcp", "127.0.0.1:6379")
+	l, err := lc.Listen(context.Background(), "tcp", "127.0.0.1:6379")
 	if err != nil {
-		fmt.Println("Failed to bind to port 6379")
+		fmt.Println("Failed to bind to port 6379: ", err.Error())
 		os.Exit(1)
 	}
+	defer func() {
+		err := l.Close()
+		if err != nil {
+			fmt.Println("Error closing listener: ", err.Error())
+		}
+	}()
 
 	for {
 		conn, err := l.Accept()
 		if err != nil {
 			fmt.Println("Error accepting connection: ", err.Error())
-			os.Exit(1)
+			continue
 		}
 
 		go func(c net.Conn) {
