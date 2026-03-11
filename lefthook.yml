@@ -9,7 +9,7 @@ pre-commit:
     go-lint-typecheck:
       root: "./"
       glob: "**/*.go"
-      run: golangci-lint run --fix
+      run: golangci-lint run --fix ./...
       stage_fixed: true
 
 
