@@ -35,12 +35,12 @@ func main() {
 
 			buf := make([]byte, 1024)
 			for {
-				_, err := c.Read(buf)
+				n, err := c.Read(buf)
 				if err != nil {
 					fmt.Println("Error reading from connection: ", err.Error())
 					return
 				}
-				n, err := c.Write([]byte("+PONG\r\n"))
+				n, err = c.Write(generateResponse(buf[:n]))
 				if err != nil {
 					fmt.Println("Error writing to connection: ", err.Error())
 					return
@@ -49,4 +49,16 @@ func main() {
 			}
 		}(conn)
 	}
+}
+
+func generateResponse(buf []byte) []byte {
+	// PING
+	if string(buf) == "*1\r\n$4\r\nPING\r\n" {
+		return []byte("+PONG\r\n")
+	}
+	// ECHO
+	if len(buf) > 0 && string(buf[:20]) == "*2\r\n$4\r\nECHO\r\n" {
+		return buf[20:]
+	}
+	return []byte("-ERR unknown command\r\n")
 }
