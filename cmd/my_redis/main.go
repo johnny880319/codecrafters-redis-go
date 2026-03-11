@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strings"
 )
 
 func main() {
@@ -60,14 +61,52 @@ func runConnection(c net.Conn) {
 	}
 }
 
+func parseCommand(buf []byte) ([]string, error) {
+	if len(buf) == 0 || buf[0] != '*' {
+		return nil, fmt.Errorf("invalid command format")
+	}
+
+	offset := 1
+	// get number of arguments
+	numArgs := 0
+	for i := 1; buf[i] != '\r'; i++ {
+		numArgs = numArgs*10 + int(buf[i]-'0')
+		offset++
+	}
+	offset += 2 // skip \r\n
+
+	args := make([]string, numArgs)
+	for i := 0; i < numArgs; i++ {
+		if buf[offset] != '$' {
+			return nil, fmt.Errorf("invalid argument format")
+		}
+		offset++
+
+		argLen := 0
+		for j := offset; buf[j] != '\r'; j++ {
+			argLen = argLen*10 + int(buf[j]-'0')
+			offset++
+		}
+		offset += 2 // skip \r\n
+
+		args[i] = string(buf[offset : offset+argLen])
+		offset += argLen + 2 // skip argument and \r\n
+	}
+	return args, nil
+}
+
 func generateResponse(buf []byte) []byte {
-	// PING
-	if string(buf) == "*1\r\n$4\r\nPING\r\n" {
+	args, err := parseCommand(buf)
+	if err != nil {
+		return []byte("-ERR invalid command format\r\n")
+	}
+	// PING (transform to lowercase for simplicity)
+	if len(args) == 1 && strings.ToLower(args[0]) == "ping" {
 		return []byte("+PONG\r\n")
 	}
 	// ECHO
-	if len(buf) > 0 && string(buf[:14]) == "*2\r\n$4\r\nECHO\r\n" {
-		return buf[14:]
+	if len(args) == 2 && strings.ToLower(args[0]) == "echo" {
+		return []byte("+" + args[1] + "\r\n")
 	}
 	// unknown command
 	return []byte("-ERR unknown command\r\n")
