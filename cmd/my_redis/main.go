@@ -5,10 +5,19 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strconv"
 	"strings"
 )
 
+type database struct {
+	data map[string]string
+}
+
 func main() {
+	db := &database{
+		data: make(map[string]string),
+	}
+
 	lc := net.ListenConfig{}
 
 	l, err := lc.Listen(context.Background(), "tcp", "127.0.0.1:6379")
@@ -31,12 +40,12 @@ func main() {
 		}
 
 		go func(c net.Conn) {
-			runConnection(c)
+			db.runConnection(c)
 		}(conn)
 	}
 }
 
-func runConnection(c net.Conn) {
+func (db *database) runConnection(c net.Conn) {
 	defer func() {
 		err := c.Close()
 		if err != nil {
@@ -52,13 +61,41 @@ func runConnection(c net.Conn) {
 			return
 		}
 		fmt.Println("Received", n, "bytes: ", string(buf[:n]))
-		n, err = c.Write(generateResponse(buf[:n]))
+		n, err = c.Write(db.generateResponse(buf[:n]))
 		if err != nil {
 			fmt.Println("Error writing to connection: ", err.Error())
 			return
 		}
 		fmt.Println("Sent", n, "bytes")
 	}
+}
+
+func (db *database) generateResponse(buf []byte) []byte {
+	args, err := parseCommand(buf)
+	if err != nil {
+		return []byte("-ERR invalid command format\r\n")
+	}
+	// PING (transform to lowercase for simplicity)
+	if len(args) == 1 && strings.ToLower(args[0]) == "ping" {
+		return []byte("+PONG\r\n")
+	}
+	// ECHO
+	if len(args) == 2 && strings.ToLower(args[0]) == "echo" {
+		return []byte("$" + strconv.Itoa(len(args[1])) + "\r\n" + args[1] + "\r\n")
+	}
+	if len(args) == 3 && strings.ToLower(args[0]) == "set" {
+		db.data[args[1]] = args[2]
+		return []byte("+OK\r\n")
+	}
+	if len(args) == 2 && strings.ToLower(args[0]) == "get" {
+		val, ok := db.data[args[1]]
+		if !ok {
+			return []byte("$-1\r\n") // nil response
+		}
+		return []byte("$" + strconv.Itoa(len(val)) + "\r\n" + val + "\r\n")
+	}
+	// unknown command
+	return []byte("-ERR unknown command\r\n")
 }
 
 func parseCommand(buf []byte) ([]string, error) {
@@ -93,21 +130,4 @@ func parseCommand(buf []byte) ([]string, error) {
 		offset += argLen + 2 // skip argument and \r\n
 	}
 	return args, nil
-}
-
-func generateResponse(buf []byte) []byte {
-	args, err := parseCommand(buf)
-	if err != nil {
-		return []byte("-ERR invalid command format\r\n")
-	}
-	// PING (transform to lowercase for simplicity)
-	if len(args) == 1 && strings.ToLower(args[0]) == "ping" {
-		return []byte("+PONG\r\n")
-	}
-	// ECHO
-	if len(args) == 2 && strings.ToLower(args[0]) == "echo" {
-		return []byte("$" + fmt.Sprint(len(args[1])) + "\r\n" + args[1] + "\r\n")
-	}
-	// unknown command
-	return []byte("-ERR unknown command\r\n")
 }
