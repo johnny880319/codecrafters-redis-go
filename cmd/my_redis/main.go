@@ -65,5 +65,6 @@ func generateResponse(buf []byte) []byte {
 	if len(buf) > 0 && string(buf[:14]) == "*2\r\n$4\r\nECHO\r\n" {
 		return buf[14:]
 	}
+	// unknown command
 	return []byte("-ERR unknown command\r\n")
 }
