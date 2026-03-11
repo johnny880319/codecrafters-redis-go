@@ -106,7 +106,7 @@ func generateResponse(buf []byte) []byte {
 	}
 	// ECHO
 	if len(args) == 2 && strings.ToLower(args[0]) == "echo" {
-		return []byte("+" + args[1] + "\r\n")
+		return []byte("$" + fmt.Sprint(len(args[1])) + "\r\n" + args[1] + "\r\n")
 	}
 	// unknown command
 	return []byte("-ERR unknown command\r\n")
