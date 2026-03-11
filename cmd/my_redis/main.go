@@ -40,6 +40,7 @@ func main() {
 					fmt.Println("Error reading from connection: ", err.Error())
 					return
 				}
+				fmt.Println("Received", n, "bytes: ", string(buf[:n]))
 				n, err = c.Write(generateResponse(buf[:n]))
 				if err != nil {
 					fmt.Println("Error writing to connection: ", err.Error())
