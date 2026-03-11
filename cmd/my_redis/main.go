@@ -58,8 +58,8 @@ func generateResponse(buf []byte) []byte {
 		return []byte("+PONG\r\n")
 	}
 	// ECHO
-	if len(buf) > 0 && string(buf[:20]) == "*2\r\n$4\r\nECHO\r\n" {
-		return buf[20:]
+	if len(buf) > 0 && string(buf[:14]) == "*2\r\n$4\r\nECHO\r\n" {
+		return buf[14:]
 	}
 	return []byte("-ERR unknown command\r\n")
 }
