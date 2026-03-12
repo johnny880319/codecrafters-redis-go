@@ -15,7 +15,6 @@ func (db *Database) getCommandMap() map[string]func(args []string) []byte {
 		"get":    db.cmdGet,
 		"rpush":  db.cmdRpush,
 		"lpush":  db.cmdLpush,
-		"rpop":   db.cmdRpop,
 		"lpop":   db.cmdLpop,
 		"lrange": db.cmdLrange,
 		"llen":   db.cmdLlen,
@@ -136,32 +135,6 @@ func (db *Database) cmdLpush(args []string) []byte {
 	db.data[key] = entry
 
 	return []byte(":" + strconv.Itoa(len(entry.value.([]string))) + "\r\n")
-}
-
-func (db *Database) cmdRpop(args []string) []byte {
-	if len(args) != 1 {
-		return []byte("-ERR wrong number of arguments for 'RPOP' command\r\n")
-	}
-	key := args[0]
-
-	entry, exists := db.data[key]
-	if !exists {
-		return []byte("$-1\r\n") // nil response
-	} else if entry.vType != ListType {
-		return []byte("-ERR wrong type of value for 'RPOP' command\r\n")
-	}
-
-	list, ok := entry.value.([]string)
-	if !ok || len(list) == 0 {
-		return []byte("$-1\r\n") // nil response
-	}
-
-	lastIndex := len(list) - 1
-	value := list[lastIndex]
-	entry.value = list[:lastIndex] // remove last element
-	db.data[key] = entry
-
-	return []byte("$" + strconv.Itoa(len(value)) + "\r\n" + value + "\r\n")
 }
 
 func (db *Database) cmdLpop(args []string) []byte {
