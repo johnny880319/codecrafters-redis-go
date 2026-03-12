@@ -165,10 +165,18 @@ func (db *Database) cmdRpop(args []string) []byte {
 }
 
 func (db *Database) cmdLpop(args []string) []byte {
-	if len(args) != 1 {
+	if len(args) < 1 || len(args) > 2 {
 		return []byte("-ERR wrong number of arguments for 'LPOP' command\r\n")
 	}
 	key := args[0]
+	count := 1
+	if len(args) == 2 {
+		var err error
+		count, err = strconv.Atoi(args[1])
+		if err != nil || count <= 0 {
+			return []byte("-ERR invalid count value\r\n")
+		}
+	}
 
 	entry, exists := db.data[key]
 	if !exists {
@@ -182,11 +190,20 @@ func (db *Database) cmdLpop(args []string) []byte {
 		return []byte("$-1\r\n") // nil response
 	}
 
-	value := list[0]
-	entry.value = list[1:] // remove first element
+	if count > len(list) {
+		count = len(list)
+	}
+
+	values := list[:count]
+	entry.value = list[count:] // remove popped elements
 	db.data[key] = entry
 
-	return []byte("$" + strconv.Itoa(len(value)) + "\r\n" + value + "\r\n")
+	var response strings.Builder
+	response.WriteString("*" + strconv.Itoa(len(values)) + "\r\n")
+	for _, value := range values {
+		response.WriteString("$" + strconv.Itoa(len(value)) + "\r\n" + value + "\r\n")
+	}
+	return []byte(response.String())
 }
 
 func (db *Database) cmdLrange(args []string) []byte {
