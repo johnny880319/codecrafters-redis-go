@@ -279,7 +279,7 @@ func (db *Database) cmdBLpop(args []string) []byte {
 			return
 		}
 
-		waiter := make(chan string)
+		waiter = make(chan string)
 		db.waiters[key] = append(db.waiters[key], waiter)
 	}()
 
