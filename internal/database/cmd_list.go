@@ -34,13 +34,9 @@ func (db *Database) cmdRpush(args []string) []byte {
 	if waiters, hasWaiters := db.waiters[key]; hasWaiters {
 		values := entry.value.([]string)
 		for len(waiters) > 0 && len(values) > 0 {
-			waiter := waiters[0]
+			waiters[0] <- values[0]
 			waiters = waiters[1:]
-
-			value := values[0]
-			values = values[1:] // remove first element
-
-			waiter <- value
+			values = values[1:]
 		}
 		if len(waiters) == 0 {
 			delete(db.waiters, key)
