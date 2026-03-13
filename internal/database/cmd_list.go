@@ -80,13 +80,9 @@ func (db *Database) cmdLpush(args []string) []byte {
 	if waiters, hasWaiters := db.waiters[key]; hasWaiters {
 		values := entry.value.([]string)
 		for len(waiters) > 0 && len(values) > 0 {
-			waiter := waiters[0]
+			waiters[0] <- values[0]
 			waiters = waiters[1:]
-
-			value := values[0]
-			values = values[1:] // remove first element
-
-			waiter <- value
+			values = values[1:]
 		}
 		if len(waiters) == 0 {
 			delete(db.waiters, key)
@@ -277,28 +273,4 @@ func (db *Database) cmdLlen(args []string) []byte {
 		return []byte("-ERR wrong type of value for 'LLEN' command\r\n")
 	}
 	return respInteger(len(list))
-}
-
-func (db *Database) cmdType(args []string) []byte {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
-	if len(args) != 1 {
-		return []byte("-ERR wrong number of arguments for 'TYPE' command\r\n")
-	}
-	key := args[0]
-
-	entry, exists := db.data[key]
-	if !exists {
-		return simpleString("none")
-	}
-
-	switch entry.vType {
-	case StringType:
-		return simpleString("string")
-	case ListType:
-		return simpleString("list")
-	default:
-		return simpleString("unknown")
-	}
 }
