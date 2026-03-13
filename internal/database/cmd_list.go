@@ -256,12 +256,9 @@ func (db *Database) cmdLrange(args []string) []byte {
 		stop = length + stop
 	}
 
-	if start < 0 {
-		start = 0
-	}
-	if stop >= length {
-		stop = length - 1
-	}
+	start = max(start, 0)
+	stop = min(stop, length-1)
+
 	if start > stop || start >= length {
 		return respArray([]string{}) // empty list
 	}
