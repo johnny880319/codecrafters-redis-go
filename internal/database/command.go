@@ -116,6 +116,7 @@ func (db *Database) cmdRpush(args []string) []byte {
 
 	entry.value = append(entry.value.([]string), values...)
 	db.data[key] = entry
+	newLen := len(entry.value.([]string))
 
 	if waiters, hasWaiters := db.waiters[key]; hasWaiters {
 		values := entry.value.([]string)
@@ -137,7 +138,7 @@ func (db *Database) cmdRpush(args []string) []byte {
 		db.data[key] = entry
 	}
 
-	return []byte(":" + strconv.Itoa(len(entry.value.([]string))) + "\r\n")
+	return []byte(":" + strconv.Itoa(newLen) + "\r\n")
 }
 
 func (db *Database) cmdLpush(args []string) []byte {
@@ -165,6 +166,7 @@ func (db *Database) cmdLpush(args []string) []byte {
 	slices.Reverse(values)
 	entry.value = slices.Insert(entry.value.([]string), 0, values...)
 	db.data[key] = entry
+	newLen := len(entry.value.([]string))
 
 	if waiters, hasWaiters := db.waiters[key]; hasWaiters {
 		values := entry.value.([]string)
@@ -186,7 +188,7 @@ func (db *Database) cmdLpush(args []string) []byte {
 		db.data[key] = entry
 	}
 
-	return []byte(":" + strconv.Itoa(len(entry.value.([]string))) + "\r\n")
+	return []byte(":" + strconv.Itoa(newLen) + "\r\n")
 }
 
 func (db *Database) cmdLpop(args []string) []byte {
