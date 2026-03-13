@@ -51,6 +51,7 @@ func (db *Database) getCommandMap() map[string]func(args []string) []byte {
 		"blpop":  db.cmdBLpop,
 		"lrange": db.cmdLrange,
 		"llen":   db.cmdLlen,
+		"type":   db.cmdType,
 	}
 }
 
