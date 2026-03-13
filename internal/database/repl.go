@@ -34,7 +34,8 @@ type Database struct {
 // NewDatabase initializes and returns a new Database instance.
 func NewDatabase() *Database {
 	return &Database{
-		data: make(map[string]dbEntry),
+		data:    make(map[string]dbEntry),
+		waiters: make(map[string][]chan string),
 	}
 }
 

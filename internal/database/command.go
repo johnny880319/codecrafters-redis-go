@@ -236,9 +236,6 @@ func (db *Database) cmdLpop(args []string) []byte {
 }
 
 func (db *Database) cmdBLpop(args []string) []byte {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
 	if len(args) != 2 {
 		return []byte("-ERR wrong number of arguments for 'BLPOP' command\r\n")
 	}
@@ -248,35 +245,47 @@ func (db *Database) cmdBLpop(args []string) []byte {
 		return []byte("-ERR invalid timeout value\r\n")
 	}
 
-	entry, exists := db.data[key]
-	if !exists {
-		entry = dbEntry{
-			value:     []string{},
-			vType:     ListType,
-			expiresAt: time.Time{},
+	var waiter chan string
+	var response []byte
+
+	func() {
+		db.mu.Lock()
+		defer db.mu.Unlock()
+		entry, exists := db.data[key]
+		if !exists {
+			entry = dbEntry{
+				value:     []string{},
+				vType:     ListType,
+				expiresAt: time.Time{},
+			}
+			db.data[key] = entry
+		} else if entry.vType != ListType {
+			response = []byte("-ERR wrong type of value for 'BLPOP' command\r\n")
+			return
 		}
-		db.data[key] = entry
-	} else if entry.vType != ListType {
-		return []byte("-ERR wrong type of value for 'BLPOP' command\r\n")
+
+		list, ok := entry.value.([]string)
+		if !ok {
+			response = []byte("-ERR wrong type of value for 'BLPOP' command\r\n")
+			return
+		}
+
+		if len(list) > 0 {
+			value := list[0]
+			entry.value = list[1:] // remove first element
+			db.data[key] = entry
+			response = []byte("*2" + "\r\n$" + strconv.Itoa(len(key)) + "\r\n" + key +
+				"\r\n$" + strconv.Itoa(len(value)) + "\r\n" + value + "\r\n")
+			return
+		}
+
+		waiter := make(chan string)
+		db.waiters[key] = append(db.waiters[key], waiter)
+	}()
+
+	if response != nil {
+		return response
 	}
-
-	list, ok := entry.value.([]string)
-	if !ok {
-		return []byte("-ERR wrong type of value for 'BLPOP' command\r\n")
-	}
-
-	if len(list) > 0 {
-		value := list[0]
-		entry.value = list[1:] // remove first element
-		db.data[key] = entry
-		return []byte("*2" + "\r\n$" + strconv.Itoa(len(key)) + "\r\n" + key +
-			"\r\n$" + strconv.Itoa(len(value)) + "\r\n" + value + "\r\n")
-	}
-
-	waiter := make(chan string)
-	db.waiters[key] = append(db.waiters[key], waiter)
-	db.mu.Unlock()
-
 	value := <-waiter
 	return []byte("*2" + "\r\n$" + strconv.Itoa(len(key)) + "\r\n" + key +
 		"\r\n$" + strconv.Itoa(len(value)) + "\r\n" + value + "\r\n")
