@@ -39,6 +39,22 @@ func NewDatabase() *Database {
 	}
 }
 
+func (db *Database) getCommandMap() map[string]func(args []string) []byte {
+	return map[string]func(args []string) []byte{
+		"ping":   db.cmdPing,
+		"echo":   db.cmdEcho,
+		"set":    db.cmdSet,
+		"get":    db.cmdGet,
+		"rpush":  db.cmdRpush,
+		"lpush":  db.cmdLpush,
+		"lpop":   db.cmdLpop,
+		"blpop":  db.cmdBLpop,
+		"lrange": db.cmdLrange,
+		"llen":   db.cmdLlen,
+		"type":   db.cmdType,
+	}
+}
+
 // RunConnection handles a single client connection, reading commands and writing responses.
 func (db *Database) RunConnection(c net.Conn) {
 	defer func() {
