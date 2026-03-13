@@ -242,7 +242,7 @@ func (db *Database) cmdBLpop(args []string) []byte {
 		return []byte("-ERR wrong number of arguments for 'BLPOP' command\r\n")
 	}
 	key := args[0]
-	timeoutSec, err := strconv.Atoi(args[1])
+	timeoutSec, err := strconv.ParseFloat(args[1], 64)
 	if err != nil || timeoutSec < 0 {
 		return []byte("-ERR invalid timeout value\r\n")
 	}
@@ -293,12 +293,25 @@ func (db *Database) cmdBLpop(args []string) []byte {
 		return []byte("*2" + "\r\n$" + strconv.Itoa(len(key)) + "\r\n" + key +
 			"\r\n$" + strconv.Itoa(len(value)) + "\r\n" + value + "\r\n")
 	}
-	timer := time.NewTimer(time.Duration(timeoutSec) * time.Second)
+	timer := time.NewTimer(time.Duration(timeoutSec * float64(time.Second)))
 	select {
 	case value := <-waiter:
 		return []byte("*2" + "\r\n$" + strconv.Itoa(len(key)) + "\r\n" + key +
 			"\r\n$" + strconv.Itoa(len(value)) + "\r\n" + value + "\r\n")
 	case <-timer.C:
+		db.mu.Lock()
+		defer db.mu.Unlock()
+		// Remove waiter from the list
+		waiters := db.waiters[key]
+		for i, w := range waiters {
+			if w == waiter {
+				db.waiters[key] = append(waiters[:i], waiters[i+1:]...)
+				break
+			}
+		}
+		if len(db.waiters[key]) == 0 {
+			delete(db.waiters, key)
+		}
 		return []byte("*-1\r\n") // nil response on timeout
 	}
 }
