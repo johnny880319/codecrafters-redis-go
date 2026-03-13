@@ -82,37 +82,3 @@ func (db *Database) generateResponse(buf []byte) []byte {
 	// unknown command
 	return []byte("-ERR unknown command\r\n")
 }
-
-func parseCommand(buf []byte) ([]string, error) {
-	if len(buf) == 0 || buf[0] != '*' {
-		return nil, fmt.Errorf("invalid command format")
-	}
-
-	offset := 1
-	// get number of arguments
-	numArgs := 0
-	for i := 1; buf[i] != '\r'; i++ {
-		numArgs = numArgs*10 + int(buf[i]-'0')
-		offset++
-	}
-	offset += 2 // skip \r\n
-
-	args := make([]string, numArgs)
-	for i := 0; i < numArgs; i++ {
-		if buf[offset] != '$' {
-			return nil, fmt.Errorf("invalid argument format")
-		}
-		offset++
-
-		argLen := 0
-		for j := offset; buf[j] != '\r'; j++ {
-			argLen = argLen*10 + int(buf[j]-'0')
-			offset++
-		}
-		offset += 2 // skip \r\n
-
-		args[i] = string(buf[offset : offset+argLen])
-		offset += argLen + 2 // skip argument and \r\n
-	}
-	return args, nil
-}

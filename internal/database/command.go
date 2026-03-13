@@ -27,14 +27,14 @@ func (db *Database) cmdPing(args []string) []byte {
 	if len(args) != 0 {
 		return []byte("-ERR wrong number of arguments for 'PING' command\r\n")
 	}
-	return []byte("+PONG\r\n")
+	return simpleString("PONG")
 }
 
 func (db *Database) cmdEcho(args []string) []byte {
 	if len(args) != 1 {
 		return []byte("-ERR wrong number of arguments for 'ECHO' command\r\n")
 	}
-	return []byte("$" + strconv.Itoa(len(args[0])) + "\r\n" + args[0] + "\r\n")
+	return bulkString(args[0], true)
 }
 
 func (db *Database) cmdSet(args []string) []byte {
@@ -71,7 +71,7 @@ func (db *Database) cmdSet(args []string) []byte {
 		vType:     StringType,
 		expiresAt: expiresAt,
 	}
-	return []byte("+OK\r\n")
+	return simpleString("OK")
 }
 
 func (db *Database) cmdGet(args []string) []byte {
@@ -84,14 +84,14 @@ func (db *Database) cmdGet(args []string) []byte {
 	key := args[0]
 	val, ok := db.data[key]
 	if !ok {
-		return []byte("$-1\r\n") // nil response
+		return bulkString("", false) // nil response
 	}
 	// check if the key has expired
 	if !val.expiresAt.IsZero() && time.Now().After(val.expiresAt) {
 		delete(db.data, key)
-		return []byte("$-1\r\n") // nil response
+		return bulkString("", false) // nil response
 	}
-	return []byte("$" + strconv.Itoa(len(val.value.(string))) + "\r\n" + val.value.(string) + "\r\n")
+	return bulkString(val.value.(string), true)
 }
 
 func (db *Database) cmdRpush(args []string) []byte {
@@ -139,7 +139,7 @@ func (db *Database) cmdRpush(args []string) []byte {
 		db.data[key] = entry
 	}
 
-	return []byte(":" + strconv.Itoa(newLen) + "\r\n")
+	return respInteger(newLen)
 }
 
 func (db *Database) cmdLpush(args []string) []byte {
@@ -189,7 +189,7 @@ func (db *Database) cmdLpush(args []string) []byte {
 		db.data[key] = entry
 	}
 
-	return []byte(":" + strconv.Itoa(newLen) + "\r\n")
+	return respInteger(newLen)
 }
 
 func (db *Database) cmdLpop(args []string) []byte {
@@ -203,21 +203,21 @@ func (db *Database) cmdLpop(args []string) []byte {
 
 	entry, exists := db.data[key]
 	if !exists {
-		return []byte("$-1\r\n") // nil response
+		return bulkString("", false) // nil response
 	} else if entry.vType != ListType {
 		return []byte("-ERR wrong type of value for 'LPOP' command\r\n")
 	}
 
 	list, ok := entry.value.([]string)
 	if !ok || len(list) == 0 {
-		return []byte("$-1\r\n") // nil response
+		return bulkString("", false) // nil response
 	}
 
 	if len(args) == 1 {
 		value := list[0]
 		entry.value = list[1:] // remove first element
 		db.data[key] = entry
-		return []byte("$" + strconv.Itoa(len(value)) + "\r\n" + value + "\r\n")
+		return bulkString(value, true)
 	}
 
 	count, err := strconv.Atoi(args[1])
@@ -230,12 +230,7 @@ func (db *Database) cmdLpop(args []string) []byte {
 	entry.value = list[count:] // remove popped elements
 	db.data[key] = entry
 
-	var response strings.Builder
-	response.WriteString("*" + strconv.Itoa(len(values)) + "\r\n")
-	for _, value := range values {
-		response.WriteString("$" + strconv.Itoa(len(value)) + "\r\n" + value + "\r\n")
-	}
-	return []byte(response.String())
+	return respArray(values)
 }
 
 func (db *Database) cmdBLpop(args []string) []byte {
@@ -277,8 +272,7 @@ func (db *Database) cmdBLpop(args []string) []byte {
 			value := list[0]
 			entry.value = list[1:] // remove first element
 			db.data[key] = entry
-			response = []byte("*2" + "\r\n$" + strconv.Itoa(len(key)) + "\r\n" + key +
-				"\r\n$" + strconv.Itoa(len(value)) + "\r\n" + value + "\r\n")
+			response = respArray([]string{key, value})
 			return
 		}
 
@@ -291,14 +285,12 @@ func (db *Database) cmdBLpop(args []string) []byte {
 	}
 	if timeoutSec == 0 {
 		value := <-waiter
-		return []byte("*2" + "\r\n$" + strconv.Itoa(len(key)) + "\r\n" + key +
-			"\r\n$" + strconv.Itoa(len(value)) + "\r\n" + value + "\r\n")
+		return respArray([]string{key, value})
 	}
 	timer := time.NewTimer(time.Duration(timeoutSec * float64(time.Second)))
 	select {
 	case value := <-waiter:
-		return []byte("*2" + "\r\n$" + strconv.Itoa(len(key)) + "\r\n" + key +
-			"\r\n$" + strconv.Itoa(len(value)) + "\r\n" + value + "\r\n")
+		return respArray([]string{key, value})
 	case <-timer.C:
 		db.mu.Lock()
 		defer db.mu.Unlock()
@@ -313,7 +305,7 @@ func (db *Database) cmdBLpop(args []string) []byte {
 		if len(db.waiters[key]) == 0 {
 			delete(db.waiters, key)
 		}
-		return []byte("*-1\r\n") // nil response on timeout
+		return respArray(nil) // nil on timeout
 	}
 }
 
@@ -333,7 +325,7 @@ func (db *Database) cmdLrange(args []string) []byte {
 
 	entry, exists := db.data[key]
 	if !exists {
-		return []byte("*0\r\n") // empty list
+		return respArray([]string{}) // empty list
 	} else if entry.vType != ListType {
 		return []byte("-ERR wrong type of value for 'LRANGE' command\r\n")
 	}
@@ -359,15 +351,10 @@ func (db *Database) cmdLrange(args []string) []byte {
 		stop = length - 1
 	}
 	if start > stop || start >= length {
-		return []byte("*0\r\n") // empty list
+		return respArray([]string{}) // empty list
 	}
 
-	var response strings.Builder
-	response.WriteString("*" + strconv.Itoa(stop-start+1) + "\r\n")
-	for i := start; i <= stop; i++ {
-		response.WriteString("$" + strconv.Itoa(len(list[i])) + "\r\n" + list[i] + "\r\n")
-	}
-	return []byte(response.String())
+	return respArray(list[start : stop+1])
 }
 
 func (db *Database) cmdLlen(args []string) []byte {
@@ -380,7 +367,7 @@ func (db *Database) cmdLlen(args []string) []byte {
 
 	entry, exists := db.data[key]
 	if !exists {
-		return []byte(":0\r\n") // empty list
+		return respInteger(0) // empty list
 	} else if entry.vType != ListType {
 		return []byte("-ERR wrong type of value for 'LLEN' command\r\n")
 	}
@@ -389,7 +376,7 @@ func (db *Database) cmdLlen(args []string) []byte {
 	if !ok {
 		return []byte("-ERR wrong type of value for 'LLEN' command\r\n")
 	}
-	return []byte(":" + strconv.Itoa(len(list)) + "\r\n")
+	return respInteger(len(list))
 }
 
 func (db *Database) cmdType(args []string) []byte {
@@ -403,15 +390,15 @@ func (db *Database) cmdType(args []string) []byte {
 
 	entry, exists := db.data[key]
 	if !exists {
-		return []byte("+none\r\n")
+		return simpleString("none")
 	}
 
 	switch entry.vType {
 	case StringType:
-		return []byte("+string\r\n")
+		return simpleString("string")
 	case ListType:
-		return []byte("+list\r\n")
+		return simpleString("list")
 	default:
-		return []byte("+unknown\r\n")
+		return simpleString("unknown")
 	}
 }
