@@ -19,6 +19,7 @@ func (db *Database) getCommandMap() map[string]func(args []string) []byte {
 		"blpop":  db.cmdBLpop,
 		"lrange": db.cmdLrange,
 		"llen":   db.cmdLlen,
+		"type":   db.cmdType,
 	}
 }
 
@@ -389,4 +390,28 @@ func (db *Database) cmdLlen(args []string) []byte {
 		return []byte("-ERR wrong type of value for 'LLEN' command\r\n")
 	}
 	return []byte(":" + strconv.Itoa(len(list)) + "\r\n")
+}
+
+func (db *Database) cmdType(args []string) []byte {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	if len(args) != 1 {
+		return []byte("-ERR wrong number of arguments for 'TYPE' command\r\n")
+	}
+	key := args[0]
+
+	entry, exists := db.data[key]
+	if !exists {
+		return []byte("+none\r\n")
+	}
+
+	switch entry.vType {
+	case StringType:
+		return []byte("+string\r\n")
+	case ListType:
+		return []byte("+list\r\n")
+	default:
+		return []byte("+unknown\r\n")
+	}
 }
