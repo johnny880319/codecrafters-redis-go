@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -24,7 +25,9 @@ type dbEntry struct {
 
 // Database represents an in-memory key-value store with command handling capabilities.
 type Database struct {
+	mu         sync.RWMutex
 	data       map[string]dbEntry
+	waiters    map[string][]chan string
 	commandMap map[string]func(args []string) []byte
 }
 

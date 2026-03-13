@@ -16,6 +16,7 @@ func (db *Database) getCommandMap() map[string]func(args []string) []byte {
 		"rpush":  db.cmdRpush,
 		"lpush":  db.cmdLpush,
 		"lpop":   db.cmdLpop,
+		"blpop":  db.cmdBLpop,
 		"lrange": db.cmdLrange,
 		"llen":   db.cmdLlen,
 	}
@@ -36,6 +37,9 @@ func (db *Database) cmdEcho(args []string) []byte {
 }
 
 func (db *Database) cmdSet(args []string) []byte {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
 	if len(args) != 2 && len(args) != 4 {
 		return []byte("-ERR wrong number of arguments for 'SET' command\r\n")
 	}
@@ -61,7 +65,6 @@ func (db *Database) cmdSet(args []string) []byte {
 			return []byte("-ERR invalid expiration option\r\n")
 		}
 	}
-
 	db.data[key] = dbEntry{
 		value:     value,
 		vType:     StringType,
@@ -71,6 +74,9 @@ func (db *Database) cmdSet(args []string) []byte {
 }
 
 func (db *Database) cmdGet(args []string) []byte {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
 	if len(args) != 1 {
 		return []byte("-ERR wrong number of arguments for 'GET' command\r\n")
 	}
@@ -88,6 +94,9 @@ func (db *Database) cmdGet(args []string) []byte {
 }
 
 func (db *Database) cmdRpush(args []string) []byte {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
 	if len(args) < 2 {
 		return []byte("-ERR wrong number of arguments for 'RPUSH' command\r\n")
 	}
@@ -108,10 +117,33 @@ func (db *Database) cmdRpush(args []string) []byte {
 	entry.value = append(entry.value.([]string), values...)
 	db.data[key] = entry
 
+	if waiters, hasWaiters := db.waiters[key]; hasWaiters {
+		values := entry.value.([]string)
+		for len(waiters) > 0 && len(values) > 0 {
+			waiter := waiters[0]
+			waiters = waiters[1:]
+
+			value := values[0]
+			values = values[1:] // remove first element
+
+			waiter <- value
+		}
+		if len(waiters) == 0 {
+			delete(db.waiters, key)
+		} else {
+			db.waiters[key] = waiters
+		}
+		entry.value = values
+		db.data[key] = entry
+	}
+
 	return []byte(":" + strconv.Itoa(len(entry.value.([]string))) + "\r\n")
 }
 
 func (db *Database) cmdLpush(args []string) []byte {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
 	if len(args) < 2 {
 		return []byte("-ERR wrong number of arguments for 'LPUSH' command\r\n")
 	}
@@ -134,10 +166,33 @@ func (db *Database) cmdLpush(args []string) []byte {
 	entry.value = slices.Insert(entry.value.([]string), 0, values...)
 	db.data[key] = entry
 
+	if waiters, hasWaiters := db.waiters[key]; hasWaiters {
+		values := entry.value.([]string)
+		for len(waiters) > 0 && len(values) > 0 {
+			waiter := waiters[0]
+			waiters = waiters[1:]
+
+			value := values[0]
+			values = values[1:] // remove first element
+
+			waiter <- value
+		}
+		if len(waiters) == 0 {
+			delete(db.waiters, key)
+		} else {
+			db.waiters[key] = waiters
+		}
+		entry.value = values
+		db.data[key] = entry
+	}
+
 	return []byte(":" + strconv.Itoa(len(entry.value.([]string))) + "\r\n")
 }
 
 func (db *Database) cmdLpop(args []string) []byte {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
 	if len(args) < 1 || len(args) > 2 {
 		return []byte("-ERR wrong number of arguments for 'LPOP' command\r\n")
 	}
@@ -180,7 +235,57 @@ func (db *Database) cmdLpop(args []string) []byte {
 	return []byte(response.String())
 }
 
+func (db *Database) cmdBLpop(args []string) []byte {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	if len(args) != 2 {
+		return []byte("-ERR wrong number of arguments for 'BLPOP' command\r\n")
+	}
+	key := args[0]
+	timeoutSec, err := strconv.Atoi(args[1])
+	if err != nil || timeoutSec < 0 {
+		return []byte("-ERR invalid timeout value\r\n")
+	}
+
+	entry, exists := db.data[key]
+	if !exists {
+		entry = dbEntry{
+			value:     []string{},
+			vType:     ListType,
+			expiresAt: time.Time{},
+		}
+		db.data[key] = entry
+	} else if entry.vType != ListType {
+		return []byte("-ERR wrong type of value for 'BLPOP' command\r\n")
+	}
+
+	list, ok := entry.value.([]string)
+	if !ok {
+		return []byte("-ERR wrong type of value for 'BLPOP' command\r\n")
+	}
+
+	if len(list) > 0 {
+		value := list[0]
+		entry.value = list[1:] // remove first element
+		db.data[key] = entry
+		return []byte("*2" + "\r\n$" + strconv.Itoa(len(key)) + "\r\n" + key +
+			"\r\n$" + strconv.Itoa(len(value)) + "\r\n" + value + "\r\n")
+	}
+
+	waiter := make(chan string)
+	db.waiters[key] = append(db.waiters[key], waiter)
+	db.mu.Unlock()
+
+	value := <-waiter
+	return []byte("*2" + "\r\n$" + strconv.Itoa(len(key)) + "\r\n" + key +
+		"\r\n$" + strconv.Itoa(len(value)) + "\r\n" + value + "\r\n")
+}
+
 func (db *Database) cmdLrange(args []string) []byte {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
 	if len(args) != 3 {
 		return []byte("-ERR wrong number of arguments for 'LRANGE' command\r\n")
 	}
@@ -231,6 +336,8 @@ func (db *Database) cmdLrange(args []string) []byte {
 }
 
 func (db *Database) cmdLlen(args []string) []byte {
+	db.mu.Lock()
+	defer db.mu.Unlock()
 	if len(args) != 1 {
 		return []byte("-ERR wrong number of arguments for 'LLEN' command\r\n")
 	}
