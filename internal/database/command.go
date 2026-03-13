@@ -288,9 +288,19 @@ func (db *Database) cmdBLpop(args []string) []byte {
 	if response != nil {
 		return response
 	}
-	value := <-waiter
-	return []byte("*2" + "\r\n$" + strconv.Itoa(len(key)) + "\r\n" + key +
-		"\r\n$" + strconv.Itoa(len(value)) + "\r\n" + value + "\r\n")
+	if timeoutSec == 0 {
+		value := <-waiter
+		return []byte("*2" + "\r\n$" + strconv.Itoa(len(key)) + "\r\n" + key +
+			"\r\n$" + strconv.Itoa(len(value)) + "\r\n" + value + "\r\n")
+	}
+	timer := time.NewTimer(time.Duration(timeoutSec) * time.Second)
+	select {
+	case value := <-waiter:
+		return []byte("*2" + "\r\n$" + strconv.Itoa(len(key)) + "\r\n" + key +
+			"\r\n$" + strconv.Itoa(len(value)) + "\r\n" + value + "\r\n")
+	case <-timer.C:
+		return []byte("*-1\r\n") // nil response on timeout
+	}
 }
 
 func (db *Database) cmdLrange(args []string) []byte {
