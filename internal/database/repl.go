@@ -57,13 +57,14 @@ func (db *Database) RunConnection(c net.Conn) {
 			fmt.Println("Error reading from connection: ", err.Error())
 			return
 		}
-		fmt.Println("Received", n, "bytes: ", string(buf[:n]))
-		n, err = c.Write(db.generateResponse(buf[:n]))
+		fmt.Printf("Received command: %s", string(buf[:n]))
+		response := db.generateResponse(buf[:n])
+		fmt.Printf("Sending response: %s", string(response))
+		_, err = c.Write(response)
 		if err != nil {
 			fmt.Println("Error writing to connection: ", err.Error())
 			return
 		}
-		fmt.Println("Sent", n, "bytes")
 	}
 }
 
