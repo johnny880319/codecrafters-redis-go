@@ -15,6 +15,7 @@ type ValueType int
 const (
 	StringType ValueType = iota
 	ListType
+	StreamType
 )
 
 type dbEntry struct {
@@ -52,6 +53,7 @@ func (db *Database) getCommandMap() map[string]func(args []string) []byte {
 		"lrange": db.cmdLrange,
 		"llen":   db.cmdLlen,
 		"type":   db.cmdType,
+		"xadd":   db.cmdXadd,
 	}
 }
 
