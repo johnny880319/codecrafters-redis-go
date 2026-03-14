@@ -57,5 +57,5 @@ func (db *Database) cmdXadd(args []string) []byte {
 	stream = append(stream, newEntry)
 	entry.value = stream
 	db.data[key] = entry
-	return simpleString("OK")
+	return bulkString(key, true)
 }
