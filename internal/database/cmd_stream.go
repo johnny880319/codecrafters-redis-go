@@ -32,11 +32,12 @@ func (db *Database) cmdXadd(args []string) []byte {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
-	if len(args) < 3 || len(args)%2 == 0 {
+	if len(args) < 2 || len(args)%2 == 1 {
 		return []byte("-ERR wrong number of arguments for 'XADD' command\r\n")
 	}
 	key := args[0]
-	fields := args[1:]
+	id := args[1]
+	fields := args[2:]
 
 	entry, exists := db.data[key]
 	if !exists {
@@ -51,11 +52,12 @@ func (db *Database) cmdXadd(args []string) []byte {
 
 	stream := entry.value.([]map[string]string)
 	newEntry := make(map[string]string)
+	newEntry["id"] = id
 	for i := 0; i < len(fields); i += 2 {
 		newEntry[fields[i]] = fields[i+1]
 	}
 	stream = append(stream, newEntry)
 	entry.value = stream
 	db.data[key] = entry
-	return bulkString(key, true)
+	return bulkString(id, true)
 }
