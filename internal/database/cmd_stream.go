@@ -43,7 +43,7 @@ func (db *Database) cmdXadd(args []string) []byte {
 	fields := args[2:]
 
 	if id == "0-0" {
-		return simpleError("The ID specified in XADD must be greater than 0-0")
+		return simpleError(xaddIDNotGreaterThanZero)
 	}
 
 	entry, exists := db.data[key]
@@ -72,7 +72,7 @@ func (db *Database) cmdXadd(args []string) []byte {
 		newSequence := id[newDash+1:]
 
 		if newTimestamp < lastTimestamp || (newTimestamp == lastTimestamp && newSequence <= lastSequence) {
-			return simpleError("The ID specified in XADD is equal or smaller than the target stream top item")
+			return simpleError(xaddIDNotGreaterThanLast)
 		}
 	}
 
