@@ -1,6 +1,9 @@
 package database
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 func (db *Database) cmdType(args []string) []byte {
 	db.mu.Lock()
@@ -39,6 +42,10 @@ func (db *Database) cmdXadd(args []string) []byte {
 	id := args[1]
 	fields := args[2:]
 
+	if id == "0-0" {
+		return simpleError("The ID specified in XADD must be greater than 0-0")
+	}
+
 	entry, exists := db.data[key]
 	if !exists {
 		entry = dbEntry{
@@ -51,6 +58,24 @@ func (db *Database) cmdXadd(args []string) []byte {
 	}
 
 	stream := entry.value.([]map[string]string)
+
+	if len(stream) > 0 {
+		lastID := stream[len(stream)-1]["id"]
+		lastDash := strings.Index(lastID, "-")
+		newDash := strings.Index(id, "-")
+		if lastDash == -1 || newDash == -1 {
+			return simpleError("Invalid ID format for XADD")
+		}
+		lastTimestamp := lastID[:lastDash]
+		lastSequence := lastID[lastDash+1:]
+		newTimestamp := id[:newDash]
+		newSequence := id[newDash+1:]
+
+		if newTimestamp < lastTimestamp || (newTimestamp == lastTimestamp && newSequence <= lastSequence) {
+			return simpleError("The ID specified in XADD must be greater than the last entry's ID")
+		}
+	}
+
 	newEntry := make(map[string]string)
 	newEntry["id"] = id
 	for i := 0; i < len(fields); i += 2 {

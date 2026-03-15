@@ -66,3 +66,7 @@ func respArray(arr []string) []byte {
 	}
 	return []byte(response.String())
 }
+
+func simpleError(msg string) []byte {
+	return []byte("-ERR " + msg + "\r\n")
+}
