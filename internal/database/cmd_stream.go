@@ -1,6 +1,7 @@
 package database
 
 import (
+	"strconv"
 	"strings"
 	"time"
 )
@@ -42,10 +43,6 @@ func (db *Database) cmdXadd(args []string) []byte {
 	id := args[1]
 	fields := args[2:]
 
-	if id == "0-0" {
-		return simpleError(xaddIDNotGreaterThanZero)
-	}
-
 	entry, exists := db.data[key]
 	if !exists {
 		entry = dbEntry{
@@ -59,21 +56,9 @@ func (db *Database) cmdXadd(args []string) []byte {
 
 	stream := entry.value.([]map[string]string)
 
-	if len(stream) > 0 {
-		lastID := stream[len(stream)-1]["id"]
-		lastDash := strings.Index(lastID, "-")
-		newDash := strings.Index(id, "-")
-		if lastDash == -1 || newDash == -1 {
-			return simpleError("Invalid ID format for XADD")
-		}
-		lastTimestamp := lastID[:lastDash]
-		lastSequence := lastID[lastDash+1:]
-		newTimestamp := id[:newDash]
-		newSequence := id[newDash+1:]
-
-		if newTimestamp < lastTimestamp || (newTimestamp == lastTimestamp && newSequence <= lastSequence) {
-			return simpleError(xaddIDNotGreaterThanLast)
-		}
+	id, errMsg := handleXaddId(id, stream)
+	if errMsg != "" {
+		return simpleError(errMsg)
 	}
 
 	newEntry := make(map[string]string)
@@ -85,4 +70,60 @@ func (db *Database) cmdXadd(args []string) []byte {
 	entry.value = stream
 	db.data[key] = entry
 	return bulkString(id, true)
+}
+
+func handleXaddId(rawId string, stream []map[string]string) (finished_id string, errMsg string) {
+	if rawId == "0-0" {
+		return "", xaddIDNotGreaterThanZero
+	}
+	lastTimestamp, lastSequence := 0, 0
+	var err1, err2 error
+
+	if len(stream) > 0 {
+		lastId := stream[len(stream)-1]["id"]
+		lastDash := strings.Index(lastId, "-")
+		if lastDash == -1 {
+			return "", "Invalid ID format for XADD"
+		}
+		lastTimestamp, err1 = strconv.Atoi(lastId[:lastDash])
+		lastSequence, err2 = strconv.Atoi(lastId[lastDash+1:])
+		if err1 != nil || err2 != nil {
+			return "", "Invalid ID format for XADD"
+		}
+	}
+
+	if rawId == "*" {
+		rawTimestamp := max(lastTimestamp, int(time.Now().UnixMilli()))
+		rawSequence := 0
+		if rawTimestamp == lastTimestamp {
+			rawSequence = lastSequence + 1
+		}
+		return strconv.Itoa(rawTimestamp) + "-" + strconv.Itoa(rawSequence), ""
+	}
+	rawDash := strings.Index(rawId, "-")
+	if rawDash == -1 {
+		return "", "Invalid ID format for XADD"
+	}
+	rawTimestamp, err := strconv.Atoi(rawId[:rawDash])
+	if err != nil {
+		return "", "Invalid ID format for XADD"
+	}
+	if rawTimestamp < lastTimestamp {
+		return "", xaddIDNotGreaterThanLast
+	}
+	if rawId[rawDash+1:] == "*" {
+		rawSequence := 0
+		if rawTimestamp == lastTimestamp {
+			rawSequence = lastSequence + 1
+		}
+		return strconv.Itoa(rawTimestamp) + "-" + strconv.Itoa(rawSequence), ""
+	}
+	rawSequence, err := strconv.Atoi(rawId[rawDash+1:])
+	if err != nil {
+		return "", "Invalid ID format for XADD"
+	}
+	if rawTimestamp == lastTimestamp && rawSequence <= lastSequence {
+		return "", xaddIDNotGreaterThanLast
+	}
+	return rawId, ""
 }
