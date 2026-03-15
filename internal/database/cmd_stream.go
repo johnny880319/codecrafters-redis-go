@@ -72,7 +72,7 @@ func (db *Database) cmdXadd(args []string) []byte {
 		newSequence := id[newDash+1:]
 
 		if newTimestamp < lastTimestamp || (newTimestamp == lastTimestamp && newSequence <= lastSequence) {
-			return simpleError("The ID specified in XADD must be greater than the last entry's ID")
+			return simpleError("The ID specified in XADD is equal or smaller than the target stream top item")
 		}
 	}
 
