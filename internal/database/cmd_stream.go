@@ -156,7 +156,7 @@ func (db *Database) cmdXread(args []string) []byte {
 	if len(args) < 3 || len(args)%2 == 0 {
 		return simpleError("wrong number of arguments for 'XREAD' command")
 	}
-	behave, keys, ids := strings.ToLower(args[0]), args[1:len(args)/2+2], args[len(args)/2+2:]
+	behave, keys, ids := strings.ToLower(args[0]), args[1:len(args)/2+1], args[len(args)/2+1:]
 	if behave != "streams" {
 		return simpleError("invalid syntax for 'XREAD' command")
 	}
