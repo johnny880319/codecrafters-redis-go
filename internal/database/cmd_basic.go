@@ -6,26 +6,26 @@ import (
 	"time"
 )
 
-func (db *Database) cmdPing(args []string) []byte {
+func (db *Database) cmdPing(args []string) string {
 	if len(args) != 0 {
-		return []byte("-ERR wrong number of arguments for 'PING' command\r\n")
+		return simpleError("wrong number of arguments for 'PING' command")
 	}
 	return simpleString("PONG")
 }
 
-func (db *Database) cmdEcho(args []string) []byte {
+func (db *Database) cmdEcho(args []string) string {
 	if len(args) != 1 {
-		return []byte("-ERR wrong number of arguments for 'ECHO' command\r\n")
+		return simpleError("wrong number of arguments for 'ECHO' command")
 	}
 	return bulkString(args[0], true)
 }
 
-func (db *Database) cmdSet(args []string) []byte {
+func (db *Database) cmdSet(args []string) string {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
 	if len(args) != 2 && len(args) != 4 {
-		return []byte("-ERR wrong number of arguments for 'SET' command\r\n")
+		return simpleError("wrong number of arguments for 'SET' command")
 	}
 	key := args[0]
 	value := args[1]
@@ -37,7 +37,7 @@ func (db *Database) cmdSet(args []string) []byte {
 
 		expireInt, err := strconv.Atoi(expireValue)
 		if err != nil {
-			return []byte("-ERR invalid expiration value\r\n")
+			return simpleError("invalid expiration value")
 		}
 
 		switch option {
@@ -46,7 +46,7 @@ func (db *Database) cmdSet(args []string) []byte {
 		case "ex":
 			expiresAt = time.Now().Add(time.Duration(expireInt) * time.Second)
 		default:
-			return []byte("-ERR invalid expiration option\r\n")
+			return simpleError("invalid expiration option")
 		}
 	}
 	db.data[key] = dbEntry{
@@ -57,12 +57,12 @@ func (db *Database) cmdSet(args []string) []byte {
 	return simpleString("OK")
 }
 
-func (db *Database) cmdGet(args []string) []byte {
+func (db *Database) cmdGet(args []string) string {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
 	if len(args) != 1 {
-		return []byte("-ERR wrong number of arguments for 'GET' command\r\n")
+		return simpleError("wrong number of arguments for 'GET' command")
 	}
 	key := args[0]
 	val, ok := db.data[key]

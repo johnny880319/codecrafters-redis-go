@@ -40,33 +40,33 @@ func parseCommand(buf []byte) ([]string, error) {
 	return args, nil
 }
 
-func simpleString(s string) []byte {
-	return []byte("+" + s + "\r\n")
+func simpleString(s string) string {
+	return "+" + s + "\r\n"
 }
 
-func bulkString(s string, exist bool) []byte {
+func bulkString(s string, exist bool) string {
 	if !exist {
-		return []byte("$-1\r\n") // null bulk string
+		return "$-1\r\n" // null bulk string
 	}
-	return []byte("$" + strconv.Itoa(len(s)) + "\r\n" + s + "\r\n")
+	return "$" + strconv.Itoa(len(s)) + "\r\n" + s + "\r\n"
 }
 
-func respInteger(i int) []byte {
-	return []byte(":" + strconv.Itoa(i) + "\r\n")
+func respInteger(i int) string {
+	return ":" + strconv.Itoa(i) + "\r\n"
 }
 
-func respArray(arr []string) []byte {
+func respArray(arr []string) string {
 	if arr == nil {
-		return []byte("*-1\r\n") // null array
+		return "*-1\r\n" // null array
 	}
 	var response strings.Builder
 	response.WriteString("*" + strconv.Itoa(len(arr)) + "\r\n")
 	for _, s := range arr {
 		response.WriteString("$" + strconv.Itoa(len(s)) + "\r\n" + s + "\r\n")
 	}
-	return []byte(response.String())
+	return response.String()
 }
 
-func simpleError(msg string) []byte {
-	return []byte("-ERR " + msg + "\r\n")
+func simpleError(msg string) string {
+	return "-ERR " + msg + "\r\n"
 }

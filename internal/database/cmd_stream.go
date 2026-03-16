@@ -7,12 +7,12 @@ import (
 	"time"
 )
 
-func (db *Database) cmdType(args []string) []byte {
+func (db *Database) cmdType(args []string) string {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
 	if len(args) != 1 {
-		return []byte("-ERR wrong number of arguments for 'TYPE' command\r\n")
+		return simpleError("wrong number of arguments for 'TYPE' command")
 	}
 	key := args[0]
 
@@ -33,12 +33,12 @@ func (db *Database) cmdType(args []string) []byte {
 	}
 }
 
-func (db *Database) cmdXadd(args []string) []byte {
+func (db *Database) cmdXadd(args []string) string {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
 	if len(args) < 2 || len(args)%2 == 1 {
-		return []byte("-ERR wrong number of arguments for 'XADD' command\r\n")
+		return simpleError("wrong number of arguments for 'XADD' command")
 	}
 	key := args[0]
 	id := args[1]
@@ -52,7 +52,7 @@ func (db *Database) cmdXadd(args []string) []byte {
 			expiresAt: time.Time{},
 		}
 	} else if entry.vType != StreamType {
-		return []byte("-ERR wrong type of value for 'XADD' command\r\n")
+		return simpleError("wrong type of value for 'XADD' command")
 	}
 
 	stream := entry.value.([]map[string]string)
@@ -129,12 +129,12 @@ func handleXaddId(rawId string, stream []map[string]string) (finished_id string,
 	return rawId, ""
 }
 
-func (db *Database) cmdXrange(args []string) []byte {
+func (db *Database) cmdXrange(args []string) string {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
 	if len(args) != 3 {
-		return []byte("-ERR wrong number of arguments for 'XRANGE' command\r\n")
+		return simpleError("wrong number of arguments for 'XRANGE' command")
 	}
 	key := args[0]
 	start := args[1]
@@ -144,12 +144,12 @@ func (db *Database) cmdXrange(args []string) []byte {
 	if !exists {
 		return respArray([]string{}) // empty stream
 	} else if entry.vType != StreamType {
-		return []byte("-ERR wrong type of value for 'XRANGE' command\r\n")
+		return simpleError("wrong type of value for 'XRANGE' command")
 	}
 
 	stream, ok := entry.value.([]map[string]string)
 	if !ok {
-		return []byte("-ERR wrong type of value for 'XRANGE' command\r\n")
+		return simpleError("wrong type of value for 'XRANGE' command")
 	}
 
 	results := []string{}
@@ -158,7 +158,7 @@ func (db *Database) cmdXrange(args []string) []byte {
 		compare1, err1 := compareIds(start, id)
 		compare2, err2 := compareIds(id, stop)
 		if err1 != nil || err2 != nil {
-			return []byte("-ERR invalid ID format for 'XRANGE' command\r\n")
+			return simpleError("invalid ID format for 'XRANGE' command")
 		}
 		if compare1 <= 0 && compare2 <= 0 {
 			values := []string{}
@@ -166,7 +166,7 @@ func (db *Database) cmdXrange(args []string) []byte {
 				if k != "id" {
 					values = append(values, k, v)
 				}
-				results = append(results, string(respArray([]string{id, string(respArray(values))})))
+				results = append(results, respArray([]string{id, respArray(values)}))
 			}
 		}
 	}

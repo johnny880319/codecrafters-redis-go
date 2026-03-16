@@ -6,12 +6,12 @@ import (
 	"time"
 )
 
-func (db *Database) cmdRpush(args []string) []byte {
+func (db *Database) cmdRpush(args []string) string {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
 	if len(args) < 2 {
-		return []byte("-ERR wrong number of arguments for 'RPUSH' command\r\n")
+		return simpleError("wrong number of arguments for 'RPUSH' command")
 	}
 	key := args[0]
 	values := args[1:]
@@ -24,7 +24,7 @@ func (db *Database) cmdRpush(args []string) []byte {
 			expiresAt: time.Time{},
 		}
 	} else if entry.vType != ListType {
-		return []byte("-ERR wrong type of value for 'RPUSH' command\r\n")
+		return simpleError("wrong type of value for 'RPUSH' command")
 	}
 
 	entry.value = append(entry.value.([]string), values...)
@@ -50,12 +50,12 @@ func (db *Database) cmdRpush(args []string) []byte {
 	return respInteger(newLen)
 }
 
-func (db *Database) cmdLpush(args []string) []byte {
+func (db *Database) cmdLpush(args []string) string {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
 	if len(args) < 2 {
-		return []byte("-ERR wrong number of arguments for 'LPUSH' command\r\n")
+		return simpleError("wrong number of arguments for 'LPUSH' command")
 	}
 	key := args[0]
 	values := args[1:]
@@ -68,7 +68,7 @@ func (db *Database) cmdLpush(args []string) []byte {
 			expiresAt: time.Time{},
 		}
 	} else if entry.vType != ListType {
-		return []byte("-ERR wrong type of value for 'LPUSH' command\r\n")
+		return simpleError("wrong type of value for 'LPUSH' command")
 	}
 
 	// reverse values before prepending
@@ -96,12 +96,12 @@ func (db *Database) cmdLpush(args []string) []byte {
 	return respInteger(newLen)
 }
 
-func (db *Database) cmdLpop(args []string) []byte {
+func (db *Database) cmdLpop(args []string) string {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
 	if len(args) < 1 || len(args) > 2 {
-		return []byte("-ERR wrong number of arguments for 'LPOP' command\r\n")
+		return simpleError("wrong number of arguments for 'LPOP' command")
 	}
 	key := args[0]
 
@@ -109,7 +109,7 @@ func (db *Database) cmdLpop(args []string) []byte {
 	if !exists {
 		return bulkString("", false) // nil response
 	} else if entry.vType != ListType {
-		return []byte("-ERR wrong type of value for 'LPOP' command\r\n")
+		return simpleError("wrong type of value for 'LPOP' command")
 	}
 
 	list, ok := entry.value.([]string)
@@ -126,7 +126,7 @@ func (db *Database) cmdLpop(args []string) []byte {
 
 	count, err := strconv.Atoi(args[1])
 	if err != nil || count < 0 {
-		return []byte("-ERR invalid count value\r\n")
+		return simpleError("invalid count value")
 	}
 	count = min(count, len(list))
 
@@ -137,18 +137,18 @@ func (db *Database) cmdLpop(args []string) []byte {
 	return respArray(values)
 }
 
-func (db *Database) cmdBLpop(args []string) []byte {
+func (db *Database) cmdBLpop(args []string) string {
 	if len(args) != 2 {
-		return []byte("-ERR wrong number of arguments for 'BLPOP' command\r\n")
+		return simpleError("wrong number of arguments for 'BLPOP' command")
 	}
 	key := args[0]
 	timeoutSec, err := strconv.ParseFloat(args[1], 64)
 	if err != nil || timeoutSec < 0 {
-		return []byte("-ERR invalid timeout value\r\n")
+		return simpleError("invalid timeout value")
 	}
 
 	var waiter chan string
-	var response []byte
+	var response string
 
 	func() {
 		db.mu.Lock()
@@ -162,13 +162,13 @@ func (db *Database) cmdBLpop(args []string) []byte {
 			}
 			db.data[key] = entry
 		} else if entry.vType != ListType {
-			response = []byte("-ERR wrong type of value for 'BLPOP' command\r\n")
+			response = simpleError("wrong type of value for 'BLPOP' command")
 			return
 		}
 
 		list, ok := entry.value.([]string)
 		if !ok {
-			response = []byte("-ERR wrong type of value for 'BLPOP' command\r\n")
+			response = simpleError("wrong type of value for 'BLPOP' command")
 			return
 		}
 
@@ -184,7 +184,7 @@ func (db *Database) cmdBLpop(args []string) []byte {
 		db.waiters[key] = append(db.waiters[key], waiter)
 	}()
 
-	if response != nil {
+	if response != "" {
 		return response
 	}
 	if timeoutSec == 0 {
@@ -213,30 +213,30 @@ func (db *Database) cmdBLpop(args []string) []byte {
 	}
 }
 
-func (db *Database) cmdLrange(args []string) []byte {
+func (db *Database) cmdLrange(args []string) string {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
 	if len(args) != 3 {
-		return []byte("-ERR wrong number of arguments for 'LRANGE' command\r\n")
+		return simpleError("wrong number of arguments for 'LRANGE' command")
 	}
 	key := args[0]
 	start, err1 := strconv.Atoi(args[1])
 	stop, err2 := strconv.Atoi(args[2])
 	if err1 != nil || err2 != nil {
-		return []byte("-ERR invalid start or stop index\r\n")
+		return simpleError("invalid start or stop index")
 	}
 
 	entry, exists := db.data[key]
 	if !exists {
 		return respArray([]string{}) // empty list
 	} else if entry.vType != ListType {
-		return []byte("-ERR wrong type of value for 'LRANGE' command\r\n")
+		return simpleError("wrong type of value for 'LRANGE' command")
 	}
 
 	list, ok := entry.value.([]string)
 	if !ok {
-		return []byte("-ERR wrong type of value for 'LRANGE' command\r\n")
+		return simpleError("wrong type of value for 'LRANGE' command")
 	}
 	length := len(list)
 
@@ -253,11 +253,11 @@ func (db *Database) cmdLrange(args []string) []byte {
 	return respArray(list[start : stop+1])
 }
 
-func (db *Database) cmdLlen(args []string) []byte {
+func (db *Database) cmdLlen(args []string) string {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	if len(args) != 1 {
-		return []byte("-ERR wrong number of arguments for 'LLEN' command\r\n")
+		return simpleError("wrong number of arguments for 'LLEN' command")
 	}
 	key := args[0]
 
@@ -265,12 +265,12 @@ func (db *Database) cmdLlen(args []string) []byte {
 	if !exists {
 		return respInteger(0) // empty list
 	} else if entry.vType != ListType {
-		return []byte("-ERR wrong type of value for 'LLEN' command\r\n")
+		return simpleError("wrong type of value for 'LLEN' command")
 	}
 
 	list, ok := entry.value.([]string)
 	if !ok {
-		return []byte("-ERR wrong type of value for 'LLEN' command\r\n")
+		return simpleError("wrong type of value for 'LLEN' command")
 	}
 	return respInteger(len(list))
 }
