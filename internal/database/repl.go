@@ -46,15 +46,16 @@ func (db *Database) getCommandMap() map[string]func(args []string) []byte {
 		"echo":   db.cmdEcho,
 		"set":    db.cmdSet,
 		"get":    db.cmdGet,
+		"type":   db.cmdType,
 		"rpush":  db.cmdRpush,
 		"lpush":  db.cmdLpush,
 		"lpop":   db.cmdLpop,
 		"blpop":  db.cmdBLpop,
 		"lrange": db.cmdLrange,
 		"llen":   db.cmdLlen,
-		"type":   db.cmdType,
 		"xadd":   db.cmdXadd,
 		"xrange": db.cmdXrange,
+		"xread":  db.cmdXread,
 	}
 }
 

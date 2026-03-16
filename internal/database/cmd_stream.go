@@ -7,32 +7,6 @@ import (
 	"time"
 )
 
-func (db *Database) cmdType(args []string) []byte {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
-	if len(args) != 1 {
-		return simpleError("wrong number of arguments for 'TYPE' command")
-	}
-	key := args[0]
-
-	entry, exists := db.data[key]
-	if !exists {
-		return simpleString("none")
-	}
-
-	switch entry.vType {
-	case StringType:
-		return simpleString("string")
-	case ListType:
-		return simpleString("list")
-	case StreamType:
-		return simpleString("stream")
-	default:
-		return simpleString("unknown")
-	}
-}
-
 func (db *Database) cmdXadd(args []string) []byte {
 	db.mu.Lock()
 	defer db.mu.Unlock()
@@ -142,7 +116,7 @@ func (db *Database) cmdXrange(args []string) []byte {
 
 	entry, exists := db.data[key]
 	if !exists {
-		return respArray([][]byte{}) // empty stream
+		return respArray(nil) // empty stream
 	} else if entry.vType != StreamType {
 		return simpleError("wrong type of value for 'XRANGE' command")
 	}
@@ -174,7 +148,66 @@ func (db *Database) cmdXrange(args []string) []byte {
 	return respArray(results)
 }
 
+//nolint:gocognit // will refactor later
+func (db *Database) cmdXread(args []string) []byte {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	if len(args) < 3 || len(args)%2 == 0 {
+		return simpleError("wrong number of arguments for 'XREAD' command")
+	}
+	behave, keys, ids := strings.ToLower(args[0]), args[1:len(args)/2+2], args[len(args)/2+2:]
+	if behave != "streams" {
+		return simpleError("invalid syntax for 'XREAD' command")
+	}
+
+	results := [][]byte{}
+	for i := 0; i < len(keys); i++ {
+		key, id := keys[i], ids[i]
+		entry, exists := db.data[key]
+		if !exists {
+			continue
+		} else if entry.vType != StreamType {
+			return simpleError("wrong type of value for 'XREAD' command")
+		}
+
+		stream, ok := entry.value.([]map[string]string)
+		if !ok {
+			return simpleError("wrong type of value for 'XREAD' command")
+		}
+
+		for _, item := range stream {
+			itemId := item["id"]
+			compare, err := compareIds(id, itemId)
+			if err != nil {
+				return simpleError("invalid ID format for 'XREAD' command")
+			}
+			if compare < 0 {
+				values := [][]byte{}
+				for k, v := range item {
+					if k != "id" {
+						values = append(values, bulkString(k, true), bulkString(v, true))
+					}
+				}
+				entry := respArray([][]byte{bulkString(id, true), respArray(values)})
+				results = append(results, entry)
+				break
+			}
+		}
+	}
+	if len(results) == 0 {
+		return respArray(nil) // empty stream
+	}
+	return respArray(results)
+}
+
 func compareIds(id1, id2 string) (int, error) {
+	if id1 == "-" {
+		return -1, nil
+	}
+	if id2 == "+" {
+		return -1, nil
+	}
 	dash1 := strings.Index(id1, "-")
 	dash2 := strings.Index(id2, "-")
 	if dash1 == -1 || dash2 == -1 {

@@ -76,3 +76,29 @@ func (db *Database) cmdGet(args []string) []byte {
 	}
 	return bulkString(val.value.(string), true)
 }
+
+func (db *Database) cmdType(args []string) []byte {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	if len(args) != 1 {
+		return simpleError("wrong number of arguments for 'TYPE' command")
+	}
+	key := args[0]
+
+	entry, exists := db.data[key]
+	if !exists {
+		return simpleString("none")
+	}
+
+	switch entry.vType {
+	case StringType:
+		return simpleString("string")
+	case ListType:
+		return simpleString("list")
+	case StreamType:
+		return simpleString("stream")
+	default:
+		return simpleString("unknown")
+	}
+}
