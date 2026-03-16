@@ -190,6 +190,7 @@ func (db *Database) cmdXread(args []string) []byte {
 					}
 				}
 				entry := respArray([][]byte{bulkString(itemId, true), respArray(values)})
+				entry = respArray([][]byte{entry})
 				results = append(results, respArray([][]byte{bulkString(key, true), entry}))
 				break
 			}
