@@ -1,6 +1,7 @@
 package database
 
 import (
+	"errors"
 	"strconv"
 	"strings"
 	"time"
@@ -126,4 +127,73 @@ func handleXaddId(rawId string, stream []map[string]string) (finished_id string,
 		return "", xaddIDNotGreaterThanLast
 	}
 	return rawId, ""
+}
+
+func (db *Database) cmdXrange(args []string) []byte {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	if len(args) != 3 {
+		return []byte("-ERR wrong number of arguments for 'XRANGE' command\r\n")
+	}
+	key := args[0]
+	start := args[1]
+	stop := args[2]
+
+	entry, exists := db.data[key]
+	if !exists {
+		return respArray([]string{}) // empty stream
+	} else if entry.vType != StreamType {
+		return []byte("-ERR wrong type of value for 'XRANGE' command\r\n")
+	}
+
+	stream, ok := entry.value.([]map[string]string)
+	if !ok {
+		return []byte("-ERR wrong type of value for 'XRANGE' command\r\n")
+	}
+
+	results := []string{}
+	for _, item := range stream {
+		id := item["id"]
+		compare1, err1 := compareIds(start, id)
+		compare2, err2 := compareIds(id, stop)
+		if err1 != nil || err2 != nil {
+			return []byte("-ERR invalid ID format for 'XRANGE' command\r\n")
+		}
+		if compare1 <= 0 && compare2 <= 0 {
+			values := []string{}
+			for k, v := range item {
+				if k != "id" {
+					values = append(values, k, v)
+				}
+				results = append(results, string(respArray([]string{id, string(respArray(values))})))
+			}
+		}
+	}
+	return respArray(results)
+}
+
+func compareIds(id1, id2 string) (int, error) {
+	dash1 := strings.Index(id1, "-")
+	dash2 := strings.Index(id2, "-")
+	if dash1 == -1 || dash2 == -1 {
+		dash1, dash2 = len(id1), len(id2)
+	}
+	timestamp1, err1 := strconv.Atoi(id1[:dash1])
+	timestamp2, err2 := strconv.Atoi(id2[:dash2])
+	if err1 != nil || err2 != nil {
+		return 0, errors.New("invalid ID format")
+	}
+	if timestamp1 != timestamp2 {
+		return timestamp1 - timestamp2, nil
+	}
+	if dash1 == len(id1) || dash2 == len(id2) {
+		return 0, nil
+	}
+	sequence1, err1 := strconv.Atoi(id1[dash1+1:])
+	sequence2, err2 := strconv.Atoi(id2[dash2+1:])
+	if err1 != nil || err2 != nil {
+		return 0, errors.New("invalid ID format")
+	}
+	return sequence1 - sequence2, nil
 }
