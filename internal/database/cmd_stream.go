@@ -189,8 +189,8 @@ func (db *Database) cmdXread(args []string) []byte {
 						values = append(values, bulkString(k, true), bulkString(v, true))
 					}
 				}
-				entry := respArray([][]byte{bulkString(id, true), respArray(values)})
-				results = append(results, entry)
+				entry := respArray([][]byte{bulkString(itemId, true), respArray(values)})
+				results = append(results, respArray([][]byte{bulkString(key, true), entry}))
 				break
 			}
 		}
