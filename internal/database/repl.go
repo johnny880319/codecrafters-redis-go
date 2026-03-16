@@ -29,7 +29,7 @@ type Database struct {
 	mu         sync.RWMutex
 	data       map[string]dbEntry
 	waiters    map[string][]chan string
-	commandMap map[string]func(args []string) string
+	commandMap map[string]func(args []string) []byte
 }
 
 // NewDatabase initializes and returns a new Database instance.
@@ -40,8 +40,8 @@ func NewDatabase() *Database {
 	}
 }
 
-func (db *Database) getCommandMap() map[string]func(args []string) string {
-	return map[string]func(args []string) string{
+func (db *Database) getCommandMap() map[string]func(args []string) []byte {
+	return map[string]func(args []string) []byte{
 		"ping":   db.cmdPing,
 		"echo":   db.cmdEcho,
 		"set":    db.cmdSet,
@@ -97,7 +97,7 @@ func (db *Database) generateResponse(buf []byte) []byte {
 	}
 	cmd := strings.ToLower(args[0])
 	if handler, ok := db.commandMap[cmd]; ok {
-		return []byte(handler(args[1:]))
+		return handler(args[1:])
 	}
 	// unknown command
 	return []byte("-ERR unknown command\r\n")

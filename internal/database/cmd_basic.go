@@ -6,21 +6,21 @@ import (
 	"time"
 )
 
-func (db *Database) cmdPing(args []string) string {
+func (db *Database) cmdPing(args []string) []byte {
 	if len(args) != 0 {
 		return simpleError("wrong number of arguments for 'PING' command")
 	}
 	return simpleString("PONG")
 }
 
-func (db *Database) cmdEcho(args []string) string {
+func (db *Database) cmdEcho(args []string) []byte {
 	if len(args) != 1 {
 		return simpleError("wrong number of arguments for 'ECHO' command")
 	}
 	return bulkString(args[0], true)
 }
 
-func (db *Database) cmdSet(args []string) string {
+func (db *Database) cmdSet(args []string) []byte {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
@@ -57,7 +57,7 @@ func (db *Database) cmdSet(args []string) string {
 	return simpleString("OK")
 }
 
-func (db *Database) cmdGet(args []string) string {
+func (db *Database) cmdGet(args []string) []byte {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 

@@ -3,7 +3,6 @@ package database
 import (
 	"fmt"
 	"strconv"
-	"strings"
 )
 
 func parseCommand(buf []byte) ([]string, error) {
@@ -40,33 +39,32 @@ func parseCommand(buf []byte) ([]string, error) {
 	return args, nil
 }
 
-func simpleString(s string) string {
-	return "+" + s + "\r\n"
+func simpleString(s string) []byte {
+	return []byte("+" + s + "\r\n")
 }
 
-func bulkString(s string, exist bool) string {
+func bulkString(s string, exist bool) []byte {
 	if !exist {
-		return "$-1\r\n" // null bulk string
+		return []byte("$-1\r\n") // null bulk string
 	}
-	return "$" + strconv.Itoa(len(s)) + "\r\n" + s + "\r\n"
+	return []byte("$" + strconv.Itoa(len(s)) + "\r\n" + s + "\r\n")
 }
 
-func respInteger(i int) string {
-	return ":" + strconv.Itoa(i) + "\r\n"
+func respInteger(i int) []byte {
+	return []byte(":" + strconv.Itoa(i) + "\r\n")
 }
 
-func respArray(arr []string) string {
+func respArray(arr [][]byte) []byte {
 	if arr == nil {
-		return "*-1\r\n" // null array
+		return []byte("*-1\r\n") // null array
 	}
-	var response strings.Builder
-	response.WriteString("*" + strconv.Itoa(len(arr)) + "\r\n")
-	for _, s := range arr {
-		response.WriteString("$" + strconv.Itoa(len(s)) + "\r\n" + s + "\r\n")
+	result := []byte("*" + strconv.Itoa(len(arr)) + "\r\n")
+	for _, elem := range arr {
+		result = append(result, elem...)
 	}
-	return response.String()
+	return result
 }
 
-func simpleError(msg string) string {
-	return "-ERR " + msg + "\r\n"
+func simpleError(msg string) []byte {
+	return []byte("-ERR " + msg + "\r\n")
 }

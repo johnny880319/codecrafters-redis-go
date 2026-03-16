@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-func (db *Database) cmdType(args []string) string {
+func (db *Database) cmdType(args []string) []byte {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
@@ -33,7 +33,7 @@ func (db *Database) cmdType(args []string) string {
 	}
 }
 
-func (db *Database) cmdXadd(args []string) string {
+func (db *Database) cmdXadd(args []string) []byte {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
@@ -129,7 +129,7 @@ func handleXaddId(rawId string, stream []map[string]string) (finished_id string,
 	return rawId, ""
 }
 
-func (db *Database) cmdXrange(args []string) string {
+func (db *Database) cmdXrange(args []string) []byte {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
@@ -142,7 +142,7 @@ func (db *Database) cmdXrange(args []string) string {
 
 	entry, exists := db.data[key]
 	if !exists {
-		return respArray([]string{}) // empty stream
+		return respArray([][]byte{}) // empty stream
 	} else if entry.vType != StreamType {
 		return simpleError("wrong type of value for 'XRANGE' command")
 	}
@@ -152,7 +152,7 @@ func (db *Database) cmdXrange(args []string) string {
 		return simpleError("wrong type of value for 'XRANGE' command")
 	}
 
-	results := []string{}
+	results := [][]byte{}
 	for _, item := range stream {
 		id := item["id"]
 		compare1, err1 := compareIds(start, id)
@@ -161,13 +161,13 @@ func (db *Database) cmdXrange(args []string) string {
 			return simpleError("invalid ID format for 'XRANGE' command")
 		}
 		if compare1 <= 0 && compare2 <= 0 {
-			values := []string{}
+			values := [][]byte{}
 			for k, v := range item {
 				if k != "id" {
-					values = append(values, k, v)
+					values = append(values, bulkString(k, true), bulkString(v, true))
 				}
 			}
-			entry := respArray([]string{id, respArray(values)})
+			entry := respArray([][]byte{bulkString(id, true), respArray(values)})
 			results = append(results, entry)
 		}
 	}

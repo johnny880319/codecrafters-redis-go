@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-func (db *Database) cmdRpush(args []string) string {
+func (db *Database) cmdRpush(args []string) []byte {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
@@ -50,7 +50,7 @@ func (db *Database) cmdRpush(args []string) string {
 	return respInteger(newLen)
 }
 
-func (db *Database) cmdLpush(args []string) string {
+func (db *Database) cmdLpush(args []string) []byte {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
@@ -96,7 +96,7 @@ func (db *Database) cmdLpush(args []string) string {
 	return respInteger(newLen)
 }
 
-func (db *Database) cmdLpop(args []string) string {
+func (db *Database) cmdLpop(args []string) []byte {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
@@ -134,10 +134,14 @@ func (db *Database) cmdLpop(args []string) string {
 	entry.value = list[count:] // remove popped elements
 	db.data[key] = entry
 
-	return respArray(values)
+	bytesValues := make([][]byte, len(values))
+	for i, v := range values {
+		bytesValues[i] = bulkString(v, true)
+	}
+	return respArray(bytesValues)
 }
 
-func (db *Database) cmdBLpop(args []string) string {
+func (db *Database) cmdBLpop(args []string) []byte {
 	if len(args) != 2 {
 		return simpleError("wrong number of arguments for 'BLPOP' command")
 	}
@@ -148,7 +152,7 @@ func (db *Database) cmdBLpop(args []string) string {
 	}
 
 	var waiter chan string
-	var response string
+	var response []byte
 
 	func() {
 		db.mu.Lock()
@@ -176,7 +180,7 @@ func (db *Database) cmdBLpop(args []string) string {
 			value := list[0]
 			entry.value = list[1:] // remove first element
 			db.data[key] = entry
-			response = respArray([]string{key, value})
+			response = respArray([][]byte{bulkString(key, true), bulkString(value, true)})
 			return
 		}
 
@@ -184,17 +188,17 @@ func (db *Database) cmdBLpop(args []string) string {
 		db.waiters[key] = append(db.waiters[key], waiter)
 	}()
 
-	if response != "" {
+	if response != nil {
 		return response
 	}
 	if timeoutSec == 0 {
 		value := <-waiter
-		return respArray([]string{key, value})
+		return respArray([][]byte{bulkString(key, true), bulkString(value, true)})
 	}
 	timer := time.NewTimer(time.Duration(timeoutSec * float64(time.Second)))
 	select {
 	case value := <-waiter:
-		return respArray([]string{key, value})
+		return respArray([][]byte{bulkString(key, true), bulkString(value, true)})
 	case <-timer.C:
 		db.mu.Lock()
 		defer db.mu.Unlock()
@@ -213,7 +217,7 @@ func (db *Database) cmdBLpop(args []string) string {
 	}
 }
 
-func (db *Database) cmdLrange(args []string) string {
+func (db *Database) cmdLrange(args []string) []byte {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
@@ -229,7 +233,7 @@ func (db *Database) cmdLrange(args []string) string {
 
 	entry, exists := db.data[key]
 	if !exists {
-		return respArray([]string{}) // empty list
+		return respArray([][]byte{}) // empty list
 	} else if entry.vType != ListType {
 		return simpleError("wrong type of value for 'LRANGE' command")
 	}
@@ -250,10 +254,14 @@ func (db *Database) cmdLrange(args []string) string {
 
 	start = max(start, 0)
 	stop = min(stop, length-1)
-	return respArray(list[start : stop+1])
+	bytesValues := make([][]byte, 0)
+	for i := start; i <= stop; i++ {
+		bytesValues = append(bytesValues, bulkString(list[i], true))
+	}
+	return respArray(bytesValues)
 }
 
-func (db *Database) cmdLlen(args []string) string {
+func (db *Database) cmdLlen(args []string) []byte {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	if len(args) != 1 {
