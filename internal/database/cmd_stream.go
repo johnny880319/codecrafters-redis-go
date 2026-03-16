@@ -166,8 +166,9 @@ func (db *Database) cmdXrange(args []string) string {
 				if k != "id" {
 					values = append(values, k, v)
 				}
-				results = append(results, respArray([]string{id, respArray(values)}))
 			}
+			entry := respArray([]string{id, respArray(values)})
+			results = append(results, entry)
 		}
 	}
 	return respArray(results)
