@@ -304,7 +304,10 @@ func (db *Database) notifyWaiters(key string) {
 		return
 	}
 	for _, waiter := range waiters {
-		waiter <- ""
+		select {
+		case waiter <- "":
+		default:
+		}
 	}
 	delete(db.waiters, key)
 }

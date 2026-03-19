@@ -57,6 +57,10 @@ Single `Database` struct with an in-memory `map[string]dbEntry`. Each `dbEntry` 
 - `sync.RWMutex` protects all database state
 - BLPOP uses a channel-based waiter pattern: blocked clients register a `chan string` in `db.waiters`, and RPUSH/LPUSH wake them by sending values
 
+## Collaboration Style
+
+This is a practice repository. Do not fix bugs or write code on the user's behalf — explain the issue and let the user implement the fix themselves.
+
 ## Code Style
 
 - Formatter: gofumpt (stricter than gofmt)
