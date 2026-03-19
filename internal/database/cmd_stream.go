@@ -44,6 +44,8 @@ func (db *Database) cmdXadd(args []string) []byte {
 	stream = append(stream, newEntry)
 	entry.value = stream
 	db.data[key] = entry
+
+	db.notifyWaiters(key)
 	return bulkString(id, true)
 }
 
@@ -148,18 +150,55 @@ func (db *Database) cmdXrange(args []string) []byte {
 	return respArray(results)
 }
 
-//nolint:gocognit // will refactor later
 func (db *Database) cmdXread(args []string) []byte {
+	if len(args) < 3 {
+		return simpleError("wrong number of arguments for 'XREAD' command")
+	}
+	var err error
+	timeoutMilisec := -1
+	if strings.ToLower(args[0]) == "block" {
+		timeoutMilisec, err = strconv.Atoi(args[1])
+		if err != nil || timeoutMilisec < 0 {
+			return simpleError("invalid BLOCK value for 'XREAD' command")
+		}
+		args = args[2:]
+	}
+
+	if strings.ToLower(args[0]) != "streams" {
+		return simpleError("invalid syntax for 'XREAD' command")
+	}
+	args = args[1:]
+
+	result := db.xreadOnce(args)
+	if result != nil || timeoutMilisec == -1 {
+		return result
+	}
+
+	waiter := make(chan string)
+	db.addWaiter(waiter, args)
+
+	if timeoutMilisec == 0 {
+		<-waiter
+		return db.xreadOnce(args)
+	}
+
+	select {
+	case <-waiter:
+		return db.xreadOnce(args)
+	case <-time.After(time.Duration(timeoutMilisec) * time.Millisecond):
+		return respArray(nil) // empty stream on timeout
+	}
+}
+
+//nolint:gocognit // will refactor later
+func (db *Database) xreadOnce(args []string) []byte {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
-	if len(args) < 3 || len(args)%2 == 0 {
+	if len(args)%2 != 0 {
 		return simpleError("wrong number of arguments for 'XREAD' command")
 	}
-	behave, keys, ids := strings.ToLower(args[0]), args[1:len(args)/2+1], args[len(args)/2+1:]
-	if behave != "streams" {
-		return simpleError("invalid syntax for 'XREAD' command")
-	}
+	keys, ids := args[:len(args)/2], args[len(args)/2:]
 
 	results := [][]byte{}
 	for i := 0; i < len(keys); i++ {
@@ -231,4 +270,34 @@ func compareIds(id1, id2 string) (int, error) {
 		return 0, errors.New("invalid ID format")
 	}
 	return sequence1 - sequence2, nil
+}
+
+func (db *Database) addWaiter(waiter chan string, args []string) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	keys := args[:len(args)/2]
+
+	keys_set := make(map[string]struct{})
+	for _, key := range keys {
+		keys_set[key] = struct{}{}
+	}
+
+	for key := range keys_set {
+		db.waiters[key] = append(db.waiters[key], waiter)
+	}
+}
+
+func (db *Database) notifyWaiters(key string) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	waiters, exists := db.waiters[key]
+	if !exists {
+		return
+	}
+	for _, waiter := range waiters {
+		waiter <- ""
+	}
+	delete(db.waiters, key)
 }
