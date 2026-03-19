@@ -169,9 +169,14 @@ func (db *Database) cmdXread(args []string) []byte {
 	}
 	args = args[1:]
 
-	result, args := db.xreadOnce(args)
+	result := db.xreadOnce(args)
 	if result != nil || timeoutMilisec == -1 {
 		return result
+	}
+
+	args, err = db.resolveXreadArgs(args)
+	if err != nil {
+		return simpleError(err.Error())
 	}
 
 	waiter := make(chan string)
@@ -179,26 +184,24 @@ func (db *Database) cmdXread(args []string) []byte {
 
 	if timeoutMilisec == 0 {
 		<-waiter
-		result, _ := db.xreadOnce(args)
-		return result
+		return db.xreadOnce(args)
 	}
 
 	select {
 	case <-waiter:
-		result, _ := db.xreadOnce(args)
-		return result
+		return db.xreadOnce(args)
 	case <-time.After(time.Duration(timeoutMilisec) * time.Millisecond):
 		return respArray(nil) // empty stream on timeout
 	}
 }
 
 //nolint:gocognit // will refactor later
-func (db *Database) xreadOnce(args []string) ([]byte, []string) {
+func (db *Database) xreadOnce(args []string) []byte {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
 	if len(args)%2 != 0 {
-		return simpleError("wrong number of arguments for 'XREAD' command"), nil
+		return simpleError("wrong number of arguments for 'XREAD' command")
 	}
 	keys, ids := args[:len(args)/2], args[len(args)/2:]
 
@@ -207,29 +210,21 @@ func (db *Database) xreadOnce(args []string) ([]byte, []string) {
 		key, id := keys[i], ids[i]
 		entry, exists := db.data[key]
 		if !exists {
-			if id == "$" {
-				args[i+len(keys)] = "0-0"
-			}
 			continue
 		} else if entry.vType != StreamType {
-			return simpleError("wrong type of value for 'XREAD' command"), nil
+			return simpleError("wrong type of value for 'XREAD' command")
 		}
 
 		stream, ok := entry.value.([]map[string]string)
 		if !ok {
-			return simpleError("wrong type of value for 'XREAD' command"), nil
-		}
-		if id == "$" {
-			id = stream[len(stream)-1]["id"]
-			args[i+len(keys)] = id
-			continue
+			return simpleError("wrong type of value for 'XREAD' command")
 		}
 
 		for _, item := range stream {
 			itemId := item["id"]
 			compare, err := compareIds(id, itemId)
 			if err != nil {
-				return simpleError("invalid ID format for 'XREAD' command"), nil
+				return simpleError("invalid ID format for 'XREAD' command")
 			}
 			if compare < 0 {
 				values := [][]byte{}
@@ -246,9 +241,43 @@ func (db *Database) xreadOnce(args []string) ([]byte, []string) {
 		}
 	}
 	if len(results) == 0 {
-		return nil, args // no results yet
+		return nil
 	}
-	return respArray(results), nil
+	return respArray(results)
+}
+
+func (db *Database) resolveXreadArgs(args []string) ([]string, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	if len(args)%2 != 0 {
+		return nil, errors.New("wrong number of arguments for 'XREAD' command")
+	}
+	keys, ids := args[:len(args)/2], args[len(args)/2:]
+
+	for i := 0; i < len(keys); i++ {
+		key, id := keys[i], ids[i]
+		entry, exists := db.data[key]
+		if !exists {
+			if id == "$" {
+				args[i+len(keys)] = "0-0"
+			}
+			continue
+		} else if entry.vType != StreamType {
+			return nil, errors.New("wrong type of value for 'XREAD' command")
+		}
+
+		stream, ok := entry.value.([]map[string]string)
+		if !ok {
+			return nil, errors.New("wrong type of value for 'XREAD' command")
+		}
+		if id == "$" {
+			id = stream[len(stream)-1]["id"]
+			args[i+len(keys)] = id
+			continue
+		}
+	}
+	return args, nil
 }
 
 func compareIds(id1, id2 string) (int, error) {
