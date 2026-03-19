@@ -287,6 +287,9 @@ func compareIds(id1, id2 string) (int, error) {
 	if id2 == "+" {
 		return -1, nil
 	}
+	if id1 == "$" {
+		return 1, nil
+	}
 	dash1 := strings.Index(id1, "-")
 	dash2 := strings.Index(id2, "-")
 	if dash1 == -1 || dash2 == -1 {
