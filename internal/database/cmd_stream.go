@@ -174,7 +174,7 @@ func (db *Database) cmdXread(args []string) []byte {
 		return result
 	}
 
-	waiter := make(chan string)
+	waiter := make(chan string, 1)
 	db.addWaiter(waiter, args)
 
 	if timeoutMilisec == 0 {
