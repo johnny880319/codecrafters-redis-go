@@ -174,7 +174,7 @@ func (db *Database) cmdXread(args []string) []byte {
 		return result
 	}
 
-	waiter := make(chan string, 1)
+	waiter := make(chan string)
 	db.addWaiter(waiter, args)
 
 	if timeoutMilisec == 0 {
@@ -289,9 +289,6 @@ func (db *Database) addWaiter(waiter chan string, args []string) {
 }
 
 func (db *Database) notifyWaiters(key string) {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
 	waiters, exists := db.waiters[key]
 	if !exists {
 		return
