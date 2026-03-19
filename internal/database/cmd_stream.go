@@ -236,7 +236,7 @@ func (db *Database) xreadOnce(args []string) []byte {
 		}
 	}
 	if len(results) == 0 {
-		return respArray(nil) // empty stream
+		return nil // no results yet
 	}
 	return respArray(results)
 }
