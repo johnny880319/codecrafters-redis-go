@@ -49,7 +49,7 @@ func (db *Database) cmdXadd(args []string) []byte {
 	return bulkString(id, true)
 }
 
-func handleXaddId(rawId string, stream []map[string]string) (finished_id string, errMsg string) {
+func handleXaddId(rawId string, stream []map[string]string) (finishedId string, errMsg string) {
 	if rawId == "0-0" {
 		return "", xaddIDNotGreaterThanZero
 	}
@@ -118,7 +118,7 @@ func (db *Database) cmdXrange(args []string) []byte {
 
 	entry, exists := db.data[key]
 	if !exists {
-		return respArray(nil) // empty stream
+		return respArray([][]byte{})
 	} else if entry.vType != StreamType {
 		return simpleError("wrong type of value for 'XRANGE' command")
 	}
@@ -320,12 +320,12 @@ func (db *Database) addWaiter(waiter chan string, args []string) {
 
 	keys := args[:len(args)/2]
 
-	keys_set := make(map[string]struct{})
+	keysSet := make(map[string]struct{})
 	for _, key := range keys {
-		keys_set[key] = struct{}{}
+		keysSet[key] = struct{}{}
 	}
 
-	for key := range keys_set {
+	for key := range keysSet {
 		db.waiters[key] = append(db.waiters[key], waiter)
 	}
 }
