@@ -1,6 +1,9 @@
 package database
 
-import "strconv"
+import (
+	"strconv"
+	"time"
+)
 
 func (db *Database) cmdIncr(args []string) []byte {
 	db.mu.Lock()
@@ -10,9 +13,16 @@ func (db *Database) cmdIncr(args []string) []byte {
 		return simpleError("wrong number of arguments for 'INCR' command")
 	}
 	key := args[0]
-	content, entry, _, err := db.getStringEntry(key)
+	content, entry, exist, err := db.getStringEntry(key)
 	if err != nil {
 		return simpleError(err.Error())
+	}
+	if !exist {
+		content = "0"
+		entry = dbEntry{
+			vType:     StringType,
+			expiresAt: time.Time{},
+		}
 	}
 	contentInt, err := strconv.Atoi(content)
 	if err != nil {
