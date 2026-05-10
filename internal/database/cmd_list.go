@@ -16,7 +16,7 @@ func (db *Database) cmdRpush(args []string) []byte {
 	key := args[0]
 	values := args[1:]
 
-	entry, exists := db.data[key]
+	entry, exists := db.getEntry(key)
 	if !exists {
 		entry = dbEntry{
 			value:     []string{},
@@ -60,7 +60,7 @@ func (db *Database) cmdLpush(args []string) []byte {
 	key := args[0]
 	values := args[1:]
 
-	entry, exists := db.data[key]
+	entry, exists := db.getEntry(key)
 	if !exists {
 		entry = dbEntry{
 			value:     []string{},
@@ -105,7 +105,7 @@ func (db *Database) cmdLpop(args []string) []byte {
 	}
 	key := args[0]
 
-	entry, exists := db.data[key]
+	entry, exists := db.getEntry(key)
 	if !exists {
 		return bulkString("", false) // nil response
 	} else if entry.vType != ListType {
@@ -157,7 +157,7 @@ func (db *Database) cmdBLpop(args []string) []byte {
 	func() {
 		db.mu.Lock()
 		defer db.mu.Unlock()
-		entry, exists := db.data[key]
+		entry, exists := db.getEntry(key)
 		if !exists {
 			entry = dbEntry{
 				value:     []string{},
@@ -231,7 +231,7 @@ func (db *Database) cmdLrange(args []string) []byte {
 		return simpleError("invalid start or stop index")
 	}
 
-	entry, exists := db.data[key]
+	entry, exists := db.getEntry(key)
 	if !exists {
 		return respArray([][]byte{}) // empty list
 	} else if entry.vType != ListType {
@@ -269,7 +269,7 @@ func (db *Database) cmdLlen(args []string) []byte {
 	}
 	key := args[0]
 
-	entry, exists := db.data[key]
+	entry, exists := db.getEntry(key)
 	if !exists {
 		return respInteger(0) // empty list
 	} else if entry.vType != ListType {

@@ -64,17 +64,11 @@ func (db *Database) cmdGet(args []string) []byte {
 	if len(args) != 1 {
 		return simpleError("wrong number of arguments for 'GET' command")
 	}
-	key := args[0]
-	val, ok := db.data[key]
-	if !ok {
+	entry, exists := db.getEntry(args[0])
+	if !exists {
 		return bulkString("", false) // nil response
 	}
-	// check if the key has expired
-	if !val.expiresAt.IsZero() && time.Now().After(val.expiresAt) {
-		delete(db.data, key)
-		return bulkString("", false) // nil response
-	}
-	return bulkString(val.value.(string), true)
+	return bulkString(entry.value.(string), true)
 }
 
 func (db *Database) cmdType(args []string) []byte {
@@ -84,9 +78,8 @@ func (db *Database) cmdType(args []string) []byte {
 	if len(args) != 1 {
 		return simpleError("wrong number of arguments for 'TYPE' command")
 	}
-	key := args[0]
 
-	entry, exists := db.data[key]
+	entry, exists := db.getEntry(args[0])
 	if !exists {
 		return simpleString("none")
 	}

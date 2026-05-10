@@ -18,7 +18,7 @@ func (db *Database) cmdXadd(args []string) []byte {
 	id := args[1]
 	fields := args[2:]
 
-	entry, exists := db.data[key]
+	entry, exists := db.getEntry(key)
 	if !exists {
 		entry = dbEntry{
 			value:     []map[string]string{},
@@ -116,7 +116,7 @@ func (db *Database) cmdXrange(args []string) []byte {
 	start := args[1]
 	stop := args[2]
 
-	entry, exists := db.data[key]
+	entry, exists := db.getEntry(key)
 	if !exists {
 		return respArray([][]byte{})
 	} else if entry.vType != StreamType {
@@ -208,7 +208,7 @@ func (db *Database) xreadOnce(args []string) []byte {
 	results := [][]byte{}
 	for i := 0; i < len(keys); i++ {
 		key, id := keys[i], ids[i]
-		entry, exists := db.data[key]
+		entry, exists := db.getEntry(key)
 		if !exists {
 			continue
 		} else if entry.vType != StreamType {
@@ -257,7 +257,7 @@ func (db *Database) resolveXreadArgs(args []string) ([]string, error) {
 
 	for i := 0; i < len(keys); i++ {
 		key, id := keys[i], ids[i]
-		entry, exists := db.data[key]
+		entry, exists := db.getEntry(key)
 		if !exists {
 			if id == "$" {
 				args[i+len(keys)] = "0-0"
