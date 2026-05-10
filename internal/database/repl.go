@@ -1,6 +1,8 @@
 package database
 
 import (
+	"bufio"
+	"errors"
 	"fmt"
 	"net"
 	"strings"
@@ -75,39 +77,26 @@ func (db *Database) executeCommand(cmd string, args []string) []byte {
 }
 
 // RunConnection handles a single client connection, reading commands and writing responses.
-func (db *Database) RunConnection(c net.Conn) {
+func (db *Database) RunConnection(c net.Conn) (err error) {
 	defer func() {
-		err := c.Close()
-		if err != nil {
-			fmt.Println("Error closing connection: ", err.Error())
-		}
+		closeErr := c.Close()
+		err = errors.Join(err, closeErr)
 	}()
 
-	buf := make([]byte, 1024)
+	reader := bufio.NewReader(c)
 	for {
-		n, err := c.Read(buf)
+		command, err := readCommand(reader)
 		if err != nil {
-			fmt.Println("Error reading from connection: ", err.Error())
-			return
+			return fmt.Errorf("error reading command: %w", err)
 		}
-		fmt.Printf("Received command: %s", string(buf[:n]))
-		response := db.generateResponse(buf[:n])
-		fmt.Printf("Sending response: %s", string(response))
+		if len(command) == 0 {
+			continue
+		}
+
+		response := db.executeCommand(command[0], command[1:])
 		_, err = c.Write(response)
 		if err != nil {
-			fmt.Println("Error writing to connection: ", err.Error())
-			return
+			return fmt.Errorf("error writing response: %w", err)
 		}
 	}
-}
-
-func (db *Database) generateResponse(buf []byte) []byte {
-	args, err := parseCommand(buf)
-	if err != nil {
-		return []byte("-ERR invalid command format\r\n")
-	}
-	if len(args) == 0 {
-		return []byte("-ERR empty command\r\n")
-	}
-	return db.executeCommand(args[0], args[1:])
 }

@@ -1,42 +1,65 @@
 package database
 
 import (
+	"bufio"
 	"fmt"
+	"io"
 	"strconv"
+	"strings"
 )
 
-func parseCommand(buf []byte) ([]string, error) {
-	if len(buf) == 0 || buf[0] != '*' {
+func readCommand(reader *bufio.Reader) ([]string, error) {
+	line, err := readRespLine(reader)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(line) == 0 || line[0] != '*' {
 		return nil, fmt.Errorf("invalid command format")
 	}
 
-	offset := 1
-	// get number of arguments
-	numArgs := 0
-	for i := 1; buf[i] != '\r'; i++ {
-		numArgs = numArgs*10 + int(buf[i]-'0')
-		offset++
+	numArgs, err := strconv.Atoi(line[1:])
+	if err != nil {
+		return nil, fmt.Errorf("invalid number of arguments: %s", line[1:])
 	}
-	offset += 2 // skip \r\n
 
 	args := make([]string, numArgs)
 	for i := 0; i < numArgs; i++ {
-		if buf[offset] != '$' {
+		line, err := readRespLine(reader)
+		if err != nil {
+			return nil, err
+		}
+		if len(line) == 0 || line[0] != '$' {
 			return nil, fmt.Errorf("invalid argument format")
 		}
-		offset++
 
-		argLen := 0
-		for j := offset; buf[j] != '\r'; j++ {
-			argLen = argLen*10 + int(buf[j]-'0')
-			offset++
+		argLen, err := strconv.Atoi(line[1:])
+		if err != nil || argLen < 0 {
+			return nil, fmt.Errorf("invalid argument length: %s", line[1:])
 		}
-		offset += 2 // skip \r\n
 
-		args[i] = string(buf[offset : offset+argLen])
-		offset += argLen + 2 // skip argument and \r\n
+		buf := make([]byte, argLen+2) // +2 for \r\n
+		if _, err := io.ReadFull(reader, buf); err != nil {
+			return nil, err
+		}
+		if !strings.HasSuffix(string(buf), "\r\n") {
+			return nil, fmt.Errorf("invalid argument format: missing CRLF")
+		}
+
+		args[i] = string(buf[:argLen])
 	}
 	return args, nil
+}
+
+func readRespLine(reader *bufio.Reader) (string, error) {
+	line, err := reader.ReadString('\n')
+	if err != nil {
+		return "", err
+	}
+	if !strings.HasSuffix(line, "\r\n") {
+		return "", fmt.Errorf("invalid RESP line: %s", line)
+	}
+	return strings.TrimSuffix(line, "\r\n"), nil
 }
 
 func simpleString(s string) []byte {

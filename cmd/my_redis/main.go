@@ -34,7 +34,10 @@ func main() {
 		}
 
 		go func(c net.Conn) {
-			db.RunConnection(c)
+			err := db.RunConnection(c)
+			if err != nil {
+				fmt.Println("Error handling connection: ", err.Error())
+			}
 		}(conn)
 	}
 }
