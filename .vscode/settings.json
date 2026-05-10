@@ -1,8 +1,10 @@
 {
+    // general
     "files.trimTrailingWhitespace": true,
     "files.insertFinalNewline": true,
     "notebook.output.scrolling": true,
     "editor.formatOnSave": true,
+    // go
     "[go]": {
         "editor.defaultFormatter": "golang.go",
         "editor.codeActionsOnSave": {
@@ -15,5 +17,5 @@
     "gopls": {
         "gofumpt": true,
         "ui.semanticTokens": true
-    },
+    }
 }
