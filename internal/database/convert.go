@@ -19,7 +19,7 @@ func readCommand(reader *bufio.Reader) ([]string, error) {
 	}
 
 	numArgs, err := strconv.Atoi(line[1:])
-	if err != nil {
+	if err != nil || numArgs < 0 {
 		return nil, fmt.Errorf("invalid number of arguments: %s", line[1:])
 	}
 
