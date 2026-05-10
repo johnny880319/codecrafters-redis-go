@@ -71,6 +71,8 @@ func (db *Database) executeCommand(cmd string, args []string) []byte {
 		return db.cmdXrange(args)
 	case "xread":
 		return db.cmdXread(args)
+	case "incr":
+		return db.cmdIncr(args)
 	default:
 		return []byte("-ERR unknown command\r\n")
 	}
