@@ -64,11 +64,14 @@ func (db *Database) cmdGet(args []string) []byte {
 	if len(args) != 1 {
 		return simpleError("wrong number of arguments for 'GET' command")
 	}
-	entry, exists := db.getEntry(args[0])
+	content, _, exists, err := db.getStringEntry(args[0])
+	if err != nil {
+		return simpleError(err.Error())
+	}
 	if !exists {
 		return bulkString("", false) // nil response
 	}
-	return bulkString(entry.value.(string), true)
+	return bulkString(content, true)
 }
 
 func (db *Database) cmdType(args []string) []byte {

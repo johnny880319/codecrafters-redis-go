@@ -18,20 +18,19 @@ func (db *Database) cmdXadd(args []string) []byte {
 	id := args[1]
 	fields := args[2:]
 
-	entry, exists := db.getEntry(key)
+	content, entry, exists, err := db.getStreamEntry(key)
+	if err != nil {
+		return simpleError(err.Error())
+	}
 	if !exists {
 		entry = dbEntry{
 			value:     []map[string]string{},
 			vType:     StreamType,
 			expiresAt: time.Time{},
 		}
-	} else if entry.vType != StreamType {
-		return simpleError("wrong type of value for 'XADD' command")
 	}
 
-	stream := entry.value.([]map[string]string)
-
-	id, errMsg := handleXaddId(id, stream)
+	id, errMsg := handleXaddId(id, content)
 	if errMsg != "" {
 		return simpleError(errMsg)
 	}
@@ -41,8 +40,8 @@ func (db *Database) cmdXadd(args []string) []byte {
 	for i := 0; i < len(fields); i += 2 {
 		newEntry[fields[i]] = fields[i+1]
 	}
-	stream = append(stream, newEntry)
-	entry.value = stream
+	content = append(content, newEntry)
+	entry.value = content
 	db.data[key] = entry
 
 	db.notifyWaiters(key)
@@ -116,20 +115,16 @@ func (db *Database) cmdXrange(args []string) []byte {
 	start := args[1]
 	stop := args[2]
 
-	entry, exists := db.getEntry(key)
-	if !exists {
-		return respArray([][]byte{})
-	} else if entry.vType != StreamType {
-		return simpleError("wrong type of value for 'XRANGE' command")
+	content, _, exists, err := db.getStreamEntry(key)
+	if err != nil {
+		return simpleError(err.Error())
 	}
-
-	stream, ok := entry.value.([]map[string]string)
-	if !ok {
-		return simpleError("wrong type of value for 'XRANGE' command")
+	if !exists {
+		return respArray([][]byte{}) // empty stream
 	}
 
 	results := [][]byte{}
-	for _, item := range stream {
+	for _, item := range content {
 		id := item["id"]
 		compare1, err1 := compareIds(start, id)
 		compare2, err2 := compareIds(id, stop)
@@ -208,19 +203,16 @@ func (db *Database) xreadOnce(args []string) []byte {
 	results := [][]byte{}
 	for i := 0; i < len(keys); i++ {
 		key, id := keys[i], ids[i]
-		entry, exists := db.getEntry(key)
+
+		content, _, exists, err := db.getStreamEntry(key)
+		if err != nil {
+			return simpleError(err.Error())
+		}
 		if !exists {
 			continue
-		} else if entry.vType != StreamType {
-			return simpleError("wrong type of value for 'XREAD' command")
 		}
 
-		stream, ok := entry.value.([]map[string]string)
-		if !ok {
-			return simpleError("wrong type of value for 'XREAD' command")
-		}
-
-		for _, item := range stream {
+		for _, item := range content {
 			itemId := item["id"]
 			compare, err := compareIds(id, itemId)
 			if err != nil {
@@ -257,22 +249,20 @@ func (db *Database) resolveXreadArgs(args []string) ([]string, error) {
 
 	for i := 0; i < len(keys); i++ {
 		key, id := keys[i], ids[i]
-		entry, exists := db.getEntry(key)
+
+		content, _, exists, err := db.getStreamEntry(key)
+		if err != nil {
+			return nil, err
+		}
 		if !exists {
 			if id == "$" {
 				args[i+len(keys)] = "0-0"
 			}
 			continue
-		} else if entry.vType != StreamType {
-			return nil, errors.New("wrong type of value for 'XREAD' command")
 		}
 
-		stream, ok := entry.value.([]map[string]string)
-		if !ok {
-			return nil, errors.New("wrong type of value for 'XREAD' command")
-		}
 		if id == "$" {
-			id = stream[len(stream)-1]["id"]
+			id = content[len(content)-1]["id"]
 			args[i+len(keys)] = id
 			continue
 		}

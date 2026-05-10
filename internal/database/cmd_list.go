@@ -16,34 +16,35 @@ func (db *Database) cmdRpush(args []string) []byte {
 	key := args[0]
 	values := args[1:]
 
-	entry, exists := db.getEntry(key)
+	content, entry, exists, err := db.getListEntry(key)
+	if err != nil {
+		return simpleError(err.Error())
+	}
 	if !exists {
 		entry = dbEntry{
 			value:     []string{},
 			vType:     ListType,
 			expiresAt: time.Time{},
 		}
-	} else if entry.vType != ListType {
-		return simpleError("wrong type of value for 'RPUSH' command")
 	}
 
-	entry.value = append(entry.value.([]string), values...)
+	content = append(content, values...)
+	entry.value = content
 	db.data[key] = entry
-	newLen := len(entry.value.([]string))
+	newLen := len(content)
 
 	if waiters, hasWaiters := db.waiters[key]; hasWaiters {
-		values := entry.value.([]string)
-		for len(waiters) > 0 && len(values) > 0 {
-			waiters[0] <- values[0]
+		for len(waiters) > 0 && len(content) > 0 {
+			waiters[0] <- content[0]
 			waiters = waiters[1:]
-			values = values[1:]
+			content = content[1:]
 		}
 		if len(waiters) == 0 {
 			delete(db.waiters, key)
 		} else {
 			db.waiters[key] = waiters
 		}
-		entry.value = values
+		entry.value = content
 		db.data[key] = entry
 	}
 
@@ -60,25 +61,27 @@ func (db *Database) cmdLpush(args []string) []byte {
 	key := args[0]
 	values := args[1:]
 
-	entry, exists := db.getEntry(key)
+	content, entry, exists, err := db.getListEntry(key)
+	if err != nil {
+		return simpleError(err.Error())
+	}
 	if !exists {
 		entry = dbEntry{
 			value:     []string{},
 			vType:     ListType,
 			expiresAt: time.Time{},
 		}
-	} else if entry.vType != ListType {
-		return simpleError("wrong type of value for 'LPUSH' command")
 	}
 
 	// reverse values before prepending
 	slices.Reverse(values)
-	entry.value = slices.Insert(entry.value.([]string), 0, values...)
+	content = slices.Insert(content, 0, values...)
+	entry.value = content
 	db.data[key] = entry
-	newLen := len(entry.value.([]string))
+	newLen := len(content)
 
 	if waiters, hasWaiters := db.waiters[key]; hasWaiters {
-		values := entry.value.([]string)
+		values := content
 		for len(waiters) > 0 && len(values) > 0 {
 			waiters[0] <- values[0]
 			waiters = waiters[1:]
@@ -105,21 +108,17 @@ func (db *Database) cmdLpop(args []string) []byte {
 	}
 	key := args[0]
 
-	entry, exists := db.getEntry(key)
-	if !exists {
-		return bulkString("", false) // nil response
-	} else if entry.vType != ListType {
-		return simpleError("wrong type of value for 'LPOP' command")
+	content, entry, exists, err := db.getListEntry(key)
+	if err != nil {
+		return simpleError(err.Error())
 	}
-
-	list, ok := entry.value.([]string)
-	if !ok || len(list) == 0 {
+	if !exists || len(content) == 0 {
 		return bulkString("", false) // nil response
 	}
 
 	if len(args) == 1 {
-		value := list[0]
-		entry.value = list[1:] // remove first element
+		value := content[0]
+		entry.value = content[1:] // remove first element
 		db.data[key] = entry
 		return bulkString(value, true)
 	}
@@ -128,10 +127,10 @@ func (db *Database) cmdLpop(args []string) []byte {
 	if err != nil || count < 0 {
 		return simpleError("invalid count value")
 	}
-	count = min(count, len(list))
+	count = min(count, len(content))
 
-	values := list[:count]
-	entry.value = list[count:] // remove popped elements
+	values := content[:count]
+	entry.value = content[count:] // remove popped elements
 	db.data[key] = entry
 
 	bytesValues := make([][]byte, len(values))
@@ -157,7 +156,12 @@ func (db *Database) cmdBLpop(args []string) []byte {
 	func() {
 		db.mu.Lock()
 		defer db.mu.Unlock()
-		entry, exists := db.getEntry(key)
+
+		content, entry, exists, err := db.getListEntry(key)
+		if err != nil {
+			response = simpleError(err.Error())
+			return
+		}
 		if !exists {
 			entry = dbEntry{
 				value:     []string{},
@@ -165,20 +169,11 @@ func (db *Database) cmdBLpop(args []string) []byte {
 				expiresAt: time.Time{},
 			}
 			db.data[key] = entry
-		} else if entry.vType != ListType {
-			response = simpleError("wrong type of value for 'BLPOP' command")
-			return
 		}
 
-		list, ok := entry.value.([]string)
-		if !ok {
-			response = simpleError("wrong type of value for 'BLPOP' command")
-			return
-		}
-
-		if len(list) > 0 {
-			value := list[0]
-			entry.value = list[1:] // remove first element
+		if len(content) > 0 {
+			value := content[0]
+			entry.value = content[1:] // remove first element
 			db.data[key] = entry
 			response = respArray([][]byte{bulkString(key, true), bulkString(value, true)})
 			return
@@ -231,18 +226,15 @@ func (db *Database) cmdLrange(args []string) []byte {
 		return simpleError("invalid start or stop index")
 	}
 
-	entry, exists := db.getEntry(key)
+	content, _, exists, err := db.getListEntry(key)
+	if err != nil {
+		return simpleError(err.Error())
+	}
 	if !exists {
 		return respArray([][]byte{}) // empty list
-	} else if entry.vType != ListType {
-		return simpleError("wrong type of value for 'LRANGE' command")
 	}
 
-	list, ok := entry.value.([]string)
-	if !ok {
-		return simpleError("wrong type of value for 'LRANGE' command")
-	}
-	length := len(list)
+	length := len(content)
 
 	// Handle negative indices
 	if start < 0 {
@@ -256,7 +248,7 @@ func (db *Database) cmdLrange(args []string) []byte {
 	stop = min(stop, length-1)
 	bytesValues := make([][]byte, 0)
 	for i := start; i <= stop; i++ {
-		bytesValues = append(bytesValues, bulkString(list[i], true))
+		bytesValues = append(bytesValues, bulkString(content[i], true))
 	}
 	return respArray(bytesValues)
 }
@@ -269,16 +261,13 @@ func (db *Database) cmdLlen(args []string) []byte {
 	}
 	key := args[0]
 
-	entry, exists := db.getEntry(key)
+	content, _, exists, err := db.getListEntry(key)
+	if err != nil {
+		return simpleError(err.Error())
+	}
 	if !exists {
 		return respInteger(0) // empty list
-	} else if entry.vType != ListType {
-		return simpleError("wrong type of value for 'LLEN' command")
 	}
 
-	list, ok := entry.value.([]string)
-	if !ok {
-		return simpleError("wrong type of value for 'LLEN' command")
-	}
-	return respInteger(len(list))
+	return respInteger(len(content))
 }
