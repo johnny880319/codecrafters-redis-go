@@ -26,7 +26,7 @@ func (db *Database) cmdIncr(args []string) []byte {
 	}
 	contentInt, err := strconv.Atoi(content)
 	if err != nil {
-		return simpleError("value is not an integer or out of range")
+		return simpleError(incrValueNotInteger)
 	}
 	contentInt++
 	entry.value = strconv.Itoa(contentInt)
