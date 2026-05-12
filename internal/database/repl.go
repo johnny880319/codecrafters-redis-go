@@ -78,6 +78,8 @@ func (db *Database) RunConnection(conn net.Conn) (err error) {
 func (c *client) handleCommand(command []string) []byte {
 	cmd, args := command[0], command[1:]
 	switch strings.ToLower(cmd) {
+	case "multi":
+		return c.cmdMulti(args)
 	case "exec":
 		return c.cmdExec(args)
 	case "discard":
@@ -124,8 +126,6 @@ func (c *client) executeCommand(command []string) []byte {
 		return c.cmdXread(args)
 	case "incr":
 		return c.cmdIncr(args)
-	case "multi":
-		return c.cmdMulti(args)
 	default:
 		return []byte("-ERR unknown command\r\n")
 	}

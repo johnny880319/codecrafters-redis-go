@@ -34,12 +34,21 @@ func (c *client) cmdIncr(args []string) []byte {
 	return respInteger(contentInt)
 }
 
-func (c *client) cmdMulti(_ []string) []byte {
+func (c *client) cmdMulti(args []string) []byte {
+	if len(args) != 0 {
+		return simpleError("wrong number of arguments for 'MULTI' command")
+	}
+	if c.isMulti {
+		return simpleError("MULTI calls can not be nested")
+	}
 	c.isMulti = true
 	return simpleString("OK")
 }
 
-func (c *client) cmdExec(_ []string) []byte {
+func (c *client) cmdExec(args []string) []byte {
+	if len(args) != 0 {
+		return simpleError("wrong number of arguments for 'EXEC' command")
+	}
 	if !c.isMulti {
 		return simpleError(execWithoutMulti)
 	}
@@ -52,7 +61,10 @@ func (c *client) cmdExec(_ []string) []byte {
 	return respArray(responses)
 }
 
-func (c *client) cmdDiscard(_ []string) []byte {
+func (c *client) cmdDiscard(args []string) []byte {
+	if len(args) != 0 {
+		return simpleError("wrong number of arguments for 'DISCARD' command")
+	}
 	if !c.isMulti {
 		return simpleError(discardWithoutMulti)
 	}
