@@ -45,9 +45,18 @@ func (c *client) cmdExec(_ []string) []byte {
 	}
 	responses := make([][]byte, len(c.cmdQueue))
 	for i, command := range c.cmdQueue {
-		responses[i] = c.executeCommand(command[0], command[1:])
+		responses[i] = c.executeCommand(command)
 	}
 	c.isMulti = false
 	c.cmdQueue = nil
 	return respArray(responses)
+}
+
+func (c *client) cmdDiscard(_ []string) []byte {
+	if !c.isMulti {
+		return simpleError(discardWithoutMulti)
+	}
+	c.isMulti = false
+	c.cmdQueue = nil
+	return simpleString("OK")
 }

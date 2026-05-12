@@ -48,7 +48,51 @@ func NewDatabase() *Database {
 	}
 }
 
-func (c *client) executeCommand(cmd string, args []string) []byte {
+// RunConnection handles a single client connection, reading commands and writing responses.
+func (db *Database) RunConnection(conn net.Conn) (err error) {
+	defer func() {
+		closeErr := conn.Close()
+		err = errors.Join(err, closeErr)
+	}()
+
+	client := &client{db: db}
+
+	reader := bufio.NewReader(conn)
+	for {
+		command, err := readCommand(reader)
+		if err != nil {
+			return fmt.Errorf("error reading command: %w", err)
+		}
+		if len(command) == 0 {
+			continue
+		}
+
+		response := client.handleCommand(command)
+		_, err = conn.Write(response)
+		if err != nil {
+			return fmt.Errorf("error writing response: %w", err)
+		}
+	}
+}
+
+func (c *client) handleCommand(command []string) []byte {
+	cmd, args := command[0], command[1:]
+	switch strings.ToLower(cmd) {
+	case "exec":
+		return c.cmdExec(args)
+	case "discard":
+		return c.cmdDiscard(args)
+	}
+
+	if c.isMulti {
+		c.cmdQueue = append(c.cmdQueue, command)
+		return simpleString("QUEUED")
+	}
+	return c.executeCommand(command)
+}
+
+func (c *client) executeCommand(command []string) []byte {
+	cmd, args := command[0], command[1:]
 	switch strings.ToLower(cmd) {
 	case "ping":
 		return c.cmdPing(args)
@@ -85,43 +129,4 @@ func (c *client) executeCommand(cmd string, args []string) []byte {
 	default:
 		return []byte("-ERR unknown command\r\n")
 	}
-}
-
-// RunConnection handles a single client connection, reading commands and writing responses.
-func (db *Database) RunConnection(conn net.Conn) (err error) {
-	defer func() {
-		closeErr := conn.Close()
-		err = errors.Join(err, closeErr)
-	}()
-
-	client := &client{db: db}
-
-	reader := bufio.NewReader(conn)
-	for {
-		command, err := readCommand(reader)
-		if err != nil {
-			return fmt.Errorf("error reading command: %w", err)
-		}
-		if len(command) == 0 {
-			continue
-		}
-
-		response := client.handleCommand(command)
-		_, err = conn.Write(response)
-		if err != nil {
-			return fmt.Errorf("error writing response: %w", err)
-		}
-	}
-}
-
-func (c *client) handleCommand(command []string) []byte {
-	if strings.ToLower(command[0]) == "exec" {
-		return c.cmdExec(command[1:])
-	}
-
-	if c.isMulti {
-		c.cmdQueue = append(c.cmdQueue, command)
-		return simpleString("QUEUED")
-	}
-	return c.executeCommand(command[0], command[1:])
 }
