@@ -47,6 +47,7 @@ func (c *client) cmdExec(_ []string) []byte {
 	for i, command := range c.cmdQueue {
 		responses[i] = c.executeCommand(command[0], command[1:])
 	}
+	c.isMulti = false
 	c.cmdQueue = nil
 	return respArray(responses)
 }
