@@ -5,15 +5,15 @@ import (
 	"time"
 )
 
-func (db *Database) cmdIncr(args []string) []byte {
-	db.mu.Lock()
-	defer db.mu.Unlock()
+func (c *client) cmdIncr(args []string) []byte {
+	c.db.mu.Lock()
+	defer c.db.mu.Unlock()
 
 	if len(args) != 1 {
 		return simpleError("wrong number of arguments for 'INCR' command")
 	}
 	key := args[0]
-	content, entry, exist, err := db.getStringEntry(key)
+	content, entry, exist, err := c.db.getStringEntry(key)
 	if err != nil {
 		return simpleError(err.Error())
 	}
@@ -30,6 +30,11 @@ func (db *Database) cmdIncr(args []string) []byte {
 	}
 	contentInt++
 	entry.value = strconv.Itoa(contentInt)
-	db.data[key] = entry
+	c.db.data[key] = entry
 	return respInteger(contentInt)
+}
+
+func (c *client) cmdMulti(_ []string) []byte {
+	c.isMulti = true
+	return simpleString("OK")
 }

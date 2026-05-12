@@ -33,6 +33,13 @@ type Database struct {
 	waiters map[string][]chan string
 }
 
+type client struct {
+	db *Database
+
+	isMulti  bool
+	cmdQueue [][]string
+}
+
 // NewDatabase initializes and returns a new Database instance.
 func NewDatabase() *Database {
 	return &Database{
@@ -41,51 +48,55 @@ func NewDatabase() *Database {
 	}
 }
 
-func (db *Database) executeCommand(cmd string, args []string) []byte {
+func (c *client) executeCommand(cmd string, args []string) []byte {
 	switch strings.ToLower(cmd) {
 	case "ping":
-		return db.cmdPing(args)
+		return c.cmdPing(args)
 	case "echo":
-		return db.cmdEcho(args)
+		return c.cmdEcho(args)
 	case "set":
-		return db.cmdSet(args)
+		return c.cmdSet(args)
 	case "get":
-		return db.cmdGet(args)
+		return c.cmdGet(args)
 	case "type":
-		return db.cmdType(args)
+		return c.cmdType(args)
 	case "rpush":
-		return db.cmdRpush(args)
+		return c.cmdRpush(args)
 	case "lpush":
-		return db.cmdLpush(args)
+		return c.cmdLpush(args)
 	case "lpop":
-		return db.cmdLpop(args)
+		return c.cmdLpop(args)
 	case "blpop":
-		return db.cmdBLpop(args)
+		return c.cmdBLpop(args)
 	case "lrange":
-		return db.cmdLrange(args)
+		return c.cmdLrange(args)
 	case "llen":
-		return db.cmdLlen(args)
+		return c.cmdLlen(args)
 	case "xadd":
-		return db.cmdXadd(args)
+		return c.cmdXadd(args)
 	case "xrange":
-		return db.cmdXrange(args)
+		return c.cmdXrange(args)
 	case "xread":
-		return db.cmdXread(args)
+		return c.cmdXread(args)
 	case "incr":
-		return db.cmdIncr(args)
+		return c.cmdIncr(args)
+	case "multi":
+		return c.cmdMulti(args)
 	default:
 		return []byte("-ERR unknown command\r\n")
 	}
 }
 
 // RunConnection handles a single client connection, reading commands and writing responses.
-func (db *Database) RunConnection(c net.Conn) (err error) {
+func (db *Database) RunConnection(conn net.Conn) (err error) {
 	defer func() {
-		closeErr := c.Close()
+		closeErr := conn.Close()
 		err = errors.Join(err, closeErr)
 	}()
 
-	reader := bufio.NewReader(c)
+	client := &client{db: db}
+
+	reader := bufio.NewReader(conn)
 	for {
 		command, err := readCommand(reader)
 		if err != nil {
@@ -95,10 +106,18 @@ func (db *Database) RunConnection(c net.Conn) (err error) {
 			continue
 		}
 
-		response := db.executeCommand(command[0], command[1:])
-		_, err = c.Write(response)
+		response := client.handleCommand(command[0], command[1:])
+		_, err = conn.Write(response)
 		if err != nil {
 			return fmt.Errorf("error writing response: %w", err)
 		}
 	}
+}
+
+func (c *client) handleCommand(cmd string, args []string) []byte {
+	if c.isMulti {
+		c.cmdQueue = append(c.cmdQueue, append([]string{cmd}, args...))
+		return simpleString("QUEUED")
+	}
+	return c.executeCommand(cmd, args)
 }
