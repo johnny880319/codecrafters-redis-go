@@ -72,3 +72,7 @@ func (c *client) cmdDiscard(args []string) []byte {
 	c.cmdQueue = nil
 	return simpleString("OK")
 }
+
+func (c *client) cmdWatch(_ []string) []byte {
+	return simpleString("OK")
+}
