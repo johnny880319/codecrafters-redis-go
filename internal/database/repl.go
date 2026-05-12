@@ -37,6 +37,7 @@ type client struct {
 	db *Database
 
 	isMulti  bool
+	watched  map[string]string
 	cmdQueue [][]string
 }
 
@@ -55,7 +56,7 @@ func (db *Database) RunConnection(conn net.Conn) (err error) {
 		err = errors.Join(err, closeErr)
 	}()
 
-	client := &client{db: db}
+	client := &client{db: db, watched: make(map[string]string)}
 
 	reader := bufio.NewReader(conn)
 	for {
