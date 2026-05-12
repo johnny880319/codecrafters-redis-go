@@ -63,6 +63,7 @@ func (c *client) cmdExec(args []string) []byte {
 		if currentValue != watchedValue {
 			c.isMulti = false
 			c.cmdQueue = nil
+			c.watched = make(map[string]string)
 			return respArray(nil)
 		}
 	}
