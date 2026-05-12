@@ -36,7 +36,8 @@ type Database struct {
 type client struct {
 	db *Database
 
-	isMulti  bool
+	isMulti bool
+	// Tracks string snapshots for WATCH; version tracking would detect modify-and-restore cases.
 	watched  map[string]string
 	cmdQueue [][]string
 }
