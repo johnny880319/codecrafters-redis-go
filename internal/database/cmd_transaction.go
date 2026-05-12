@@ -104,3 +104,11 @@ func (c *client) cmdWatch(args []string) []byte {
 	}
 	return simpleString("OK")
 }
+
+func (c *client) cmdUnwatch(args []string) []byte {
+	if len(args) != 0 {
+		return simpleError("wrong number of arguments for 'UNWATCH' command")
+	}
+	c.watched = make(map[string]string)
+	return simpleString("OK")
+}

@@ -87,6 +87,8 @@ func (c *client) handleCommand(command []string) []byte {
 		return c.cmdDiscard(args)
 	case "watch":
 		return c.cmdWatch(args)
+	case "unwatch":
+		return c.cmdUnwatch(args)
 	}
 
 	if c.isMulti {
