@@ -6,23 +6,23 @@ import (
 	"time"
 )
 
-func (db *Database) cmdPing(args []string) []byte {
+func (c *client) cmdPing(args []string) []byte {
 	if len(args) != 0 {
 		return simpleError("wrong number of arguments for 'PING' command")
 	}
 	return simpleString("PONG")
 }
 
-func (db *Database) cmdEcho(args []string) []byte {
+func (c *client) cmdEcho(args []string) []byte {
 	if len(args) != 1 {
 		return simpleError("wrong number of arguments for 'ECHO' command")
 	}
 	return bulkString(args[0], true)
 }
 
-func (db *Database) cmdSet(args []string) []byte {
-	db.mu.Lock()
-	defer db.mu.Unlock()
+func (c *client) cmdSet(args []string) []byte {
+	c.db.mu.Lock()
+	defer c.db.mu.Unlock()
 
 	if len(args) != 2 && len(args) != 4 {
 		return simpleError("wrong number of arguments for 'SET' command")
@@ -49,7 +49,7 @@ func (db *Database) cmdSet(args []string) []byte {
 			return simpleError("invalid expiration option")
 		}
 	}
-	db.data[key] = dbEntry{
+	c.db.data[key] = dbEntry{
 		value:     value,
 		vType:     StringType,
 		expiresAt: expiresAt,
@@ -57,14 +57,14 @@ func (db *Database) cmdSet(args []string) []byte {
 	return simpleString("OK")
 }
 
-func (db *Database) cmdGet(args []string) []byte {
-	db.mu.Lock()
-	defer db.mu.Unlock()
+func (c *client) cmdGet(args []string) []byte {
+	c.db.mu.Lock()
+	defer c.db.mu.Unlock()
 
 	if len(args) != 1 {
 		return simpleError("wrong number of arguments for 'GET' command")
 	}
-	content, _, exists, err := db.getStringEntry(args[0])
+	content, _, exists, err := c.db.getStringEntry(args[0])
 	if err != nil {
 		return simpleError(err.Error())
 	}
@@ -74,15 +74,15 @@ func (db *Database) cmdGet(args []string) []byte {
 	return bulkString(content, true)
 }
 
-func (db *Database) cmdType(args []string) []byte {
-	db.mu.Lock()
-	defer db.mu.Unlock()
+func (c *client) cmdType(args []string) []byte {
+	c.db.mu.Lock()
+	defer c.db.mu.Unlock()
 
 	if len(args) != 1 {
 		return simpleError("wrong number of arguments for 'TYPE' command")
 	}
 
-	entry, exists := db.getEntry(args[0])
+	entry, exists := c.db.getEntry(args[0])
 	if !exists {
 		return simpleString("none")
 	}

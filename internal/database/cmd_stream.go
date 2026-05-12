@@ -7,9 +7,9 @@ import (
 	"time"
 )
 
-func (db *Database) cmdXadd(args []string) []byte {
-	db.mu.Lock()
-	defer db.mu.Unlock()
+func (c *client) cmdXadd(args []string) []byte {
+	c.db.mu.Lock()
+	defer c.db.mu.Unlock()
 
 	if len(args) < 2 || len(args)%2 == 1 {
 		return simpleError("wrong number of arguments for 'XADD' command")
@@ -18,7 +18,7 @@ func (db *Database) cmdXadd(args []string) []byte {
 	id := args[1]
 	fields := args[2:]
 
-	content, entry, exists, err := db.getStreamEntry(key)
+	content, entry, exists, err := c.db.getStreamEntry(key)
 	if err != nil {
 		return simpleError(err.Error())
 	}
@@ -42,9 +42,9 @@ func (db *Database) cmdXadd(args []string) []byte {
 	}
 	content = append(content, newEntry)
 	entry.value = content
-	db.data[key] = entry
+	c.db.data[key] = entry
 
-	db.notifyWaiters(key)
+	c.db.notifyWaiters(key)
 	return bulkString(id, true)
 }
 
@@ -104,9 +104,9 @@ func handleXaddId(rawId string, stream []map[string]string) (finishedId string, 
 	return rawId, ""
 }
 
-func (db *Database) cmdXrange(args []string) []byte {
-	db.mu.Lock()
-	defer db.mu.Unlock()
+func (c *client) cmdXrange(args []string) []byte {
+	c.db.mu.Lock()
+	defer c.db.mu.Unlock()
 
 	if len(args) != 3 {
 		return simpleError("wrong number of arguments for 'XRANGE' command")
@@ -115,7 +115,7 @@ func (db *Database) cmdXrange(args []string) []byte {
 	start := args[1]
 	stop := args[2]
 
-	content, _, exists, err := db.getStreamEntry(key)
+	content, _, exists, err := c.db.getStreamEntry(key)
 	if err != nil {
 		return simpleError(err.Error())
 	}
@@ -145,7 +145,7 @@ func (db *Database) cmdXrange(args []string) []byte {
 	return respArray(results)
 }
 
-func (db *Database) cmdXread(args []string) []byte {
+func (c *client) cmdXread(args []string) []byte {
 	if len(args) < 3 {
 		return simpleError("wrong number of arguments for 'XREAD' command")
 	}
@@ -164,27 +164,27 @@ func (db *Database) cmdXread(args []string) []byte {
 	}
 	args = args[1:]
 
-	result := db.xreadOnce(args)
+	result := c.db.xreadOnce(args)
 	if result != nil || timeoutMilisec == -1 {
 		return result
 	}
 
-	args, err = db.resolveXreadArgs(args)
+	args, err = c.db.resolveXreadArgs(args)
 	if err != nil {
 		return simpleError(err.Error())
 	}
 
 	waiter := make(chan string)
-	db.addWaiter(waiter, args)
+	c.db.addWaiter(waiter, args)
 
 	if timeoutMilisec == 0 {
 		<-waiter
-		return db.xreadOnce(args)
+		return c.db.xreadOnce(args)
 	}
 
 	select {
 	case <-waiter:
-		return db.xreadOnce(args)
+		return c.db.xreadOnce(args)
 	case <-time.After(time.Duration(timeoutMilisec) * time.Millisecond):
 		return respArray(nil) // empty stream on timeout
 	}
