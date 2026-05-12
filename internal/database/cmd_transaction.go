@@ -74,5 +74,8 @@ func (c *client) cmdDiscard(args []string) []byte {
 }
 
 func (c *client) cmdWatch(_ []string) []byte {
+	if c.isMulti {
+		return simpleError(watchInsideMulti)
+	}
 	return simpleString("OK")
 }
