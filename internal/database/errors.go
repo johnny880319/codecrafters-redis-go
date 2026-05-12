@@ -6,4 +6,5 @@ const (
 	incrValueNotInteger      = "value is not an integer or out of range"
 	execWithoutMulti         = "EXEC without MULTI"
 	discardWithoutMulti      = "DISCARD without MULTI"
+	watchInsideMulti         = "WATCH inside MULTI is not allowed"
 )

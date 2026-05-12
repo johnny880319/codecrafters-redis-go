@@ -36,7 +36,9 @@ type Database struct {
 type client struct {
 	db *Database
 
-	isMulti  bool
+	isMulti bool
+	// Tracks string snapshots for WATCH; version tracking would detect modify-and-restore cases.
+	watched  map[string]string
 	cmdQueue [][]string
 }
 
@@ -55,7 +57,7 @@ func (db *Database) RunConnection(conn net.Conn) (err error) {
 		err = errors.Join(err, closeErr)
 	}()
 
-	client := &client{db: db}
+	client := &client{db: db, watched: make(map[string]string)}
 
 	reader := bufio.NewReader(conn)
 	for {
@@ -84,6 +86,10 @@ func (c *client) handleCommand(command []string) []byte {
 		return c.cmdExec(args)
 	case "discard":
 		return c.cmdDiscard(args)
+	case "watch":
+		return c.cmdWatch(args)
+	case "unwatch":
+		return c.cmdUnwatch(args)
 	}
 
 	if c.isMulti {
