@@ -106,7 +106,7 @@ func (db *Database) RunConnection(conn net.Conn) (err error) {
 			continue
 		}
 
-		response := client.handleCommand(command[0], command[1:])
+		response := client.handleCommand(command)
 		_, err = conn.Write(response)
 		if err != nil {
 			return fmt.Errorf("error writing response: %w", err)
@@ -114,10 +114,14 @@ func (db *Database) RunConnection(conn net.Conn) (err error) {
 	}
 }
 
-func (c *client) handleCommand(cmd string, args []string) []byte {
+func (c *client) handleCommand(command []string) []byte {
+	if strings.ToLower(command[0]) == "exec" {
+		return c.cmdExec(command[1:])
+	}
+
 	if c.isMulti {
-		c.cmdQueue = append(c.cmdQueue, append([]string{cmd}, args...))
+		c.cmdQueue = append(c.cmdQueue, command)
 		return simpleString("QUEUED")
 	}
-	return c.executeCommand(cmd, args)
+	return c.executeCommand(command[0], command[1:])
 }

@@ -38,3 +38,15 @@ func (c *client) cmdMulti(_ []string) []byte {
 	c.isMulti = true
 	return simpleString("OK")
 }
+
+func (c *client) cmdExec(_ []string) []byte {
+	if !c.isMulti {
+		return simpleError(execWithoutMulti)
+	}
+	responses := make([][]byte, len(c.cmdQueue))
+	for i, command := range c.cmdQueue {
+		responses[i] = c.executeCommand(command[0], command[1:])
+	}
+	c.cmdQueue = nil
+	return respArray(responses)
+}
