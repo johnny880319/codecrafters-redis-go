@@ -54,9 +54,9 @@ func (c *client) cmdExec(args []string) []byte {
 	}
 
 	for key, watchedValue := range c.watched {
-		c.db.mu.RLock()
+		c.db.mu.Lock()
 		currentValue, _, _, err := c.db.getStringEntry(key)
-		c.db.mu.RUnlock()
+		c.db.mu.Unlock()
 		if err != nil {
 			return simpleError(err.Error())
 		}
@@ -86,6 +86,7 @@ func (c *client) cmdDiscard(args []string) []byte {
 	}
 	c.isMulti = false
 	c.cmdQueue = nil
+	c.watched = make(map[string]string)
 	return simpleString("OK")
 }
 
@@ -95,9 +96,9 @@ func (c *client) cmdWatch(args []string) []byte {
 	}
 
 	for _, key := range args {
-		c.db.mu.RLock()
+		c.db.mu.Lock()
 		content, _, _, err := c.db.getStringEntry(key)
-		c.db.mu.RUnlock()
+		c.db.mu.Unlock()
 		if err != nil {
 			return simpleError(err.Error())
 		}
