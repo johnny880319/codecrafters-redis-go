@@ -10,13 +10,19 @@ import (
 )
 
 func main() {
+	// read arg --port
+	port := "6379"
+	if len(os.Args) > 2 && os.Args[1] == "--port" {
+		port = os.Args[2]
+	}
+
 	db := database.NewDatabase()
 
 	lc := net.ListenConfig{}
 
-	l, err := lc.Listen(context.Background(), "tcp", "127.0.0.1:6379")
+	l, err := lc.Listen(context.Background(), "tcp", "127.0.0.1:"+port)
 	if err != nil {
-		fmt.Println("Failed to bind to port 6379: ", err.Error())
+		fmt.Println("Failed to bind to port ", port, ": ", err.Error())
 		os.Exit(1)
 	}
 	defer func() {
