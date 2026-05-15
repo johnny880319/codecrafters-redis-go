@@ -23,6 +23,7 @@ func (db *Database) RunReplication(masterAddr string) (err error) {
 		respArray([][]byte{bulkString("PING", true)}),
 		respArray([][]byte{bulkString("REPLCONF", true), bulkString("listening-port", true), bulkString(db.port, true)}),
 		respArray([][]byte{bulkString("REPLCONF", true), bulkString("capa", true), bulkString("psync2", true)}),
+		respArray([][]byte{bulkString("PSYNC", true), bulkString("?", true), bulkString("-1", true)}),
 	}
 
 	reader := bufio.NewReader(conn)
