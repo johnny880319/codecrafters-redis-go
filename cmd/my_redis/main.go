@@ -11,12 +11,9 @@ import (
 
 func main() {
 	// read arg --port
-	port := "6379"
-	if len(os.Args) > 2 && os.Args[1] == "--port" {
-		port = os.Args[2]
-	}
+	port, role := parseArgs(os.Args[1:])
 
-	db := database.NewDatabase()
+	db := database.NewDatabase(role)
 
 	lc := net.ListenConfig{}
 
@@ -46,4 +43,22 @@ func main() {
 			}
 		}(conn)
 	}
+}
+
+func parseArgs(args []string) (port string, role string) {
+	port = "6379"
+	role = "master"
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--port":
+			if i+1 < len(args) {
+				port = args[i+1]
+				i++
+			}
+		case "--replicaof":
+			role = "slave"
+			i += 2 // skip host and port
+		}
+	}
+	return port, role
 }

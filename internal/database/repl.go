@@ -28,6 +28,7 @@ type dbEntry struct {
 
 // Database represents an in-memory key-value store with command handling capabilities.
 type Database struct {
+	role    string
 	mu      sync.RWMutex
 	data    map[string]dbEntry
 	waiters map[string][]chan string
@@ -43,8 +44,9 @@ type client struct {
 }
 
 // NewDatabase initializes and returns a new Database instance.
-func NewDatabase() *Database {
+func NewDatabase(role string) *Database {
 	return &Database{
+		role:    role,
 		data:    make(map[string]dbEntry),
 		waiters: make(map[string][]chan string),
 	}
