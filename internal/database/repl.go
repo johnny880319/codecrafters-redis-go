@@ -112,6 +112,8 @@ func (c *client) executeCommand(command []string) []byte {
 		return c.cmdGet(args)
 	case "type":
 		return c.cmdType(args)
+	case "incr":
+		return c.cmdIncr(args)
 	case "rpush":
 		return c.cmdRpush(args)
 	case "lpush":
@@ -130,8 +132,8 @@ func (c *client) executeCommand(command []string) []byte {
 		return c.cmdXrange(args)
 	case "xread":
 		return c.cmdXread(args)
-	case "incr":
-		return c.cmdIncr(args)
+	case "info":
+		return c.cmdInfo(args)
 	default:
 		return []byte("-ERR unknown command\r\n")
 	}

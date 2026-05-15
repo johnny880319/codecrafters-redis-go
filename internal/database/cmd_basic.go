@@ -98,3 +98,32 @@ func (c *client) cmdType(args []string) []byte {
 		return simpleString("unknown")
 	}
 }
+
+func (c *client) cmdIncr(args []string) []byte {
+	c.db.mu.Lock()
+	defer c.db.mu.Unlock()
+
+	if len(args) != 1 {
+		return simpleError("wrong number of arguments for 'INCR' command")
+	}
+	key := args[0]
+	content, entry, exist, err := c.db.getStringEntry(key)
+	if err != nil {
+		return simpleError(err.Error())
+	}
+	if !exist {
+		content = "0"
+		entry = dbEntry{
+			vType:     StringType,
+			expiresAt: time.Time{},
+		}
+	}
+	contentInt, err := strconv.Atoi(content)
+	if err != nil {
+		return simpleError(incrValueNotInteger)
+	}
+	contentInt++
+	entry.value = strconv.Itoa(contentInt)
+	c.db.data[key] = entry
+	return respInteger(contentInt)
+}
