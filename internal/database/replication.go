@@ -1,6 +1,7 @@
 package database
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"net"
@@ -18,8 +19,20 @@ func (db *Database) RunReplication(masterAddr string) (err error) {
 		err = errors.Join(err, connErr)
 	}()
 
-	if _, err := conn.Write(respArray([][]byte{bulkString("PING", true)})); err != nil {
-		return err
+	handshakes := [][]byte{
+		respArray([][]byte{bulkString("PING", true)}),
+		respArray([][]byte{bulkString("REPLCONF", true), bulkString("listening-port", true), bulkString(db.port, true)}),
+		respArray([][]byte{bulkString("REPLCONF", true), bulkString("capa", true), bulkString("psync2", true)}),
+	}
+
+	reader := bufio.NewReader(conn)
+	for _, handshake := range handshakes {
+		if _, err := conn.Write(handshake); err != nil {
+			return err
+		}
+		if _, err := readResponse(reader); err != nil {
+			return err
+		}
 	}
 	return nil
 }

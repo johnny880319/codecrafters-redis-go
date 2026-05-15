@@ -8,6 +8,17 @@ import (
 	"strings"
 )
 
+func readResponse(reader *bufio.Reader) (string, error) {
+	line, err := readRespLine(reader)
+	if err != nil {
+		return "", err
+	}
+	if len(line) == 0 || line[0] != '+' {
+		return "", fmt.Errorf("invalid response format")
+	}
+	return line[1:], nil
+}
+
 func readCommand(reader *bufio.Reader) ([]string, error) {
 	line, err := readRespLine(reader)
 	if err != nil {

@@ -18,7 +18,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	db := database.NewDatabase(role)
+	db := database.NewDatabase(role, port)
 
 	lc := net.ListenConfig{}
 
