@@ -1,6 +1,9 @@
 package database
 
-import "fmt"
+import (
+	"encoding/base64"
+	"fmt"
+)
 
 func (c *client) cmdInfo(args []string) []byte {
 	if len(args) != 1 {
@@ -24,5 +27,16 @@ func (c *client) cmdReplconf(_ []string) []byte {
 }
 
 func (c *client) cmdPsync(_ []string) []byte {
-	return simpleString(fmt.Sprintf("FULLRESYNC %v 0", c.db.masterReplid))
+	response := simpleString(fmt.Sprintf("FULLRESYNC %v 0", c.db.masterReplid))
+
+	emptyRDBBase64 := "UkVESVMwMDEx+glyZWRpcy12ZXIFNy4yLjD6CnJlZGlzLWJpdHPAQPo" +
+		"FY3RpbWXCbQi8ZfoIdXNlZC1tZW3CsMQQAPoIYW9mLWJhc2XAAP/wbjv+wP9aog=="
+
+	emptyRDB, err := base64.StdEncoding.DecodeString(emptyRDBBase64)
+	if err != nil {
+		return simpleError("failed to decode empty RDB data")
+	}
+
+	response = append(response, []byte(fmt.Sprintf("$%d\r\n%s", len(emptyRDB), emptyRDB))...)
+	return response
 }
