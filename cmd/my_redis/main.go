@@ -5,13 +5,18 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strings"
 
 	"github.com/codecrafters-io/redis-starter-go/internal/database"
 )
 
 func main() {
 	// read arg --port
-	port, role := parseArgs(os.Args[1:])
+	port, role, masterAddr, err := parseArgs(os.Args[1:])
+	if err != nil {
+		fmt.Println("Error parsing arguments: ", err.Error())
+		os.Exit(1)
+	}
 
 	db := database.NewDatabase(role)
 
@@ -29,6 +34,15 @@ func main() {
 		}
 	}()
 
+	if role == "slave" {
+		go func() {
+			err := db.RunReplication(masterAddr)
+			if err != nil {
+				fmt.Println("Error running replication: ", err.Error())
+			}
+		}()
+	}
+
 	for {
 		conn, err := l.Accept()
 		if err != nil {
@@ -45,20 +59,30 @@ func main() {
 	}
 }
 
-func parseArgs(args []string) (port string, role string) {
+func parseArgs(args []string) (port string, role string, masterAddr string, err error) {
 	port = "6379"
 	role = "master"
+	masterAddr = ""
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
 		case "--port":
-			if i+1 < len(args) {
-				port = args[i+1]
-				i++
+			if len(args) <= i+1 {
+				return "", "", "", fmt.Errorf("missing value for --port")
 			}
+			port = args[i+1]
+			i++
 		case "--replicaof":
+			if len(args) <= i+1 {
+				return "", "", "", fmt.Errorf("missing value for --replicaof")
+			}
 			role = "slave"
-			i += 2 // skip host and port
+			parts := strings.Fields(args[i+1])
+			if len(parts) != 2 {
+				return "", "", "", fmt.Errorf("invalid value for --replicaof")
+			}
+			masterAddr = net.JoinHostPort(parts[0], parts[1])
+			i++
 		}
 	}
-	return port, role
+	return port, role, masterAddr, nil
 }
