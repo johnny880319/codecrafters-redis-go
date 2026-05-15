@@ -8,14 +8,17 @@ func (c *client) cmdInfo(args []string) []byte {
 	}
 	switch args[0] {
 	case "replication":
-		return bulkString(c.db.getRoleInfo(), true)
+		return bulkString(
+			fmt.Sprintf("role:%v\n", c.db.role)+
+				"master_replid:8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb\n"+
+				"master_repl_offset:0\n",
+			true,
+		)
 	default:
 		return simpleError("unsupported INFO section")
 	}
 }
 
-func (db *Database) getRoleInfo() string {
-	return fmt.Sprintf("role:%v\n", db.role) +
-		"master_replid:8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb\n" +
-		"master_repl_offset:0\n"
+func (c *client) cmdReplconf(_ []string) []byte {
+	return simpleString("OK")
 }

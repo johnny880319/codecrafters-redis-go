@@ -83,16 +83,16 @@ func (db *Database) RunConnection(conn net.Conn) (err error) {
 
 func (c *client) handleCommand(command []string) []byte {
 	cmd, args := command[0], command[1:]
-	switch strings.ToLower(cmd) {
-	case "multi":
+	switch strings.ToUpper(cmd) {
+	case "MULTI":
 		return c.cmdMulti(args)
-	case "exec":
+	case "EXEC":
 		return c.cmdExec(args)
-	case "discard":
+	case "DISCARD":
 		return c.cmdDiscard(args)
-	case "watch":
+	case "WATCH":
 		return c.cmdWatch(args)
-	case "unwatch":
+	case "UNWATCH":
 		return c.cmdUnwatch(args)
 	}
 
@@ -105,39 +105,41 @@ func (c *client) handleCommand(command []string) []byte {
 
 func (c *client) executeCommand(command []string) []byte {
 	cmd, args := command[0], command[1:]
-	switch strings.ToLower(cmd) {
-	case "ping":
+	switch strings.ToUpper(cmd) {
+	case "PING":
 		return c.cmdPing(args)
-	case "echo":
+	case "ECHO":
 		return c.cmdEcho(args)
-	case "set":
+	case "SET":
 		return c.cmdSet(args)
-	case "get":
+	case "GET":
 		return c.cmdGet(args)
-	case "type":
+	case "TYPE":
 		return c.cmdType(args)
-	case "incr":
+	case "INCR":
 		return c.cmdIncr(args)
-	case "rpush":
+	case "RPUSH":
 		return c.cmdRpush(args)
-	case "lpush":
+	case "LPUSH":
 		return c.cmdLpush(args)
-	case "lpop":
+	case "LPOP":
 		return c.cmdLpop(args)
-	case "blpop":
+	case "BLPOP":
 		return c.cmdBLpop(args)
-	case "lrange":
+	case "LRANGE":
 		return c.cmdLrange(args)
-	case "llen":
+	case "LLEN":
 		return c.cmdLlen(args)
-	case "xadd":
+	case "XADD":
 		return c.cmdXadd(args)
-	case "xrange":
+	case "XRANGE":
 		return c.cmdXrange(args)
-	case "xread":
+	case "XREAD":
 		return c.cmdXread(args)
-	case "info":
+	case "INFO":
 		return c.cmdInfo(args)
+	case "REPLCONF":
+		return c.cmdReplconf(args)
 	default:
 		return []byte("-ERR unknown command\r\n")
 	}
