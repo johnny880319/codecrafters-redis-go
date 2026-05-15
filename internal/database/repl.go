@@ -28,11 +28,12 @@ type dbEntry struct {
 
 // Database represents an in-memory key-value store with command handling capabilities.
 type Database struct {
-	role    string
-	port    string
-	mu      sync.RWMutex
-	data    map[string]dbEntry
-	waiters map[string][]chan string
+	role         string
+	port         string
+	masterReplid string
+	mu           sync.RWMutex
+	data         map[string]dbEntry
+	waiters      map[string][]chan string
 }
 
 type client struct {
@@ -47,10 +48,11 @@ type client struct {
 // NewDatabase initializes and returns a new Database instance.
 func NewDatabase(role string, port string) *Database {
 	return &Database{
-		role:    role,
-		port:    port,
-		data:    make(map[string]dbEntry),
-		waiters: make(map[string][]chan string),
+		role:         role,
+		port:         port,
+		masterReplid: "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb",
+		data:         make(map[string]dbEntry),
+		waiters:      make(map[string][]chan string),
 	}
 }
 
@@ -140,6 +142,8 @@ func (c *client) executeCommand(command []string) []byte {
 		return c.cmdInfo(args)
 	case "REPLCONF":
 		return c.cmdReplconf(args)
+	case "PSYNC":
+		return c.cmdPsync(args)
 	default:
 		return []byte("-ERR unknown command\r\n")
 	}

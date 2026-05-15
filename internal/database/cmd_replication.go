@@ -10,7 +10,7 @@ func (c *client) cmdInfo(args []string) []byte {
 	case "replication":
 		return bulkString(
 			fmt.Sprintf("role:%v\n", c.db.role)+
-				"master_replid:8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb\n"+
+				fmt.Sprintf("master_replid:%v\n", c.db.masterReplid)+
 				"master_repl_offset:0\n",
 			true,
 		)
@@ -21,4 +21,8 @@ func (c *client) cmdInfo(args []string) []byte {
 
 func (c *client) cmdReplconf(_ []string) []byte {
 	return simpleString("OK")
+}
+
+func (c *client) cmdPsync(_ []string) []byte {
+	return simpleString(fmt.Sprintf("FULLRESYNC %v 0", c.db.masterReplid))
 }
