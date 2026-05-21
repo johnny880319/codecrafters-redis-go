@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"strconv"
+	"strings"
 )
 
 // RunReplication connects to the master and starts the replication process.
@@ -55,6 +56,17 @@ func (db *Database) RunReplication(masterAddr string) (err error) {
 		}
 
 		_ = client.handleCommand(command)
+
+		if strings.ToUpper(command[0]) == "REPLCONF" {
+			_, err = conn.Write(respArray([][]byte{
+				bulkString("REPLCONF", true),
+				bulkString("ACK", true),
+				bulkString("0", true),
+			}))
+			if err != nil {
+				return fmt.Errorf("error writing response: %w", err)
+			}
+		}
 	}
 }
 
