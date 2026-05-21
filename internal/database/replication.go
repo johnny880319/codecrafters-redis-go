@@ -46,8 +46,9 @@ func (db *Database) RunReplication(masterAddr string) (err error) {
 
 	client := &client{db: db, conn: conn, watched: make(map[string]string)}
 
+	offset := 0
 	for {
-		command, _, err := readCommand(reader)
+		command, originalCommand, err := readCommand(reader)
 		if err != nil {
 			return fmt.Errorf("error reading command: %w", err)
 		}
@@ -61,12 +62,13 @@ func (db *Database) RunReplication(masterAddr string) (err error) {
 			_, err = conn.Write(respArray([][]byte{
 				bulkString("REPLCONF", true),
 				bulkString("ACK", true),
-				bulkString("0", true),
+				bulkString(strconv.Itoa(offset), true),
 			}))
 			if err != nil {
 				return fmt.Errorf("error writing response: %w", err)
 			}
 		}
+		offset += len(originalCommand)
 	}
 }
 
