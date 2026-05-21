@@ -49,5 +49,5 @@ func (c *client) cmdWait(args []string) []byte {
 	if len(args) != 2 {
 		return simpleError("wrong number of arguments for 'WAIT' command")
 	}
-	return respInteger(0)
+	return respInteger(len(c.db.replicaConns))
 }
