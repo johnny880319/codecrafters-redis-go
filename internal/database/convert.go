@@ -19,47 +19,52 @@ func readResponse(reader *bufio.Reader) (string, error) {
 	return line[1:], nil
 }
 
-func readCommand(reader *bufio.Reader) ([]string, error) {
+func readCommand(reader *bufio.Reader) ([]string, string, error) {
+	originalCommand := ""
 	line, err := readRespLine(reader)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
+	originalCommand += line + "\r\n"
 
 	if len(line) == 0 || line[0] != '*' {
-		return nil, fmt.Errorf("invalid command format")
+		return nil, "", fmt.Errorf("invalid command format")
 	}
 
 	numArgs, err := strconv.Atoi(line[1:])
 	if err != nil || numArgs < 0 {
-		return nil, fmt.Errorf("invalid number of arguments: %s", line[1:])
+		return nil, "", fmt.Errorf("invalid number of arguments: %s", line[1:])
 	}
 
 	args := make([]string, numArgs)
 	for i := 0; i < numArgs; i++ {
 		line, err := readRespLine(reader)
 		if err != nil {
-			return nil, err
+			return nil, "", err
 		}
+		originalCommand += line + "\r\n"
+
 		if len(line) == 0 || line[0] != '$' {
-			return nil, fmt.Errorf("invalid argument format")
+			return nil, "", fmt.Errorf("invalid argument format")
 		}
 
 		argLen, err := strconv.Atoi(line[1:])
 		if err != nil || argLen < 0 {
-			return nil, fmt.Errorf("invalid argument length: %s", line[1:])
+			return nil, "", fmt.Errorf("invalid argument length: %s", line[1:])
 		}
 
 		buf := make([]byte, argLen+2) // +2 for \r\n
 		if _, err := io.ReadFull(reader, buf); err != nil {
-			return nil, err
+			return nil, "", err
 		}
 		if !strings.HasSuffix(string(buf), "\r\n") {
-			return nil, fmt.Errorf("invalid argument format: missing CRLF")
+			return nil, "", fmt.Errorf("invalid argument format: missing CRLF")
 		}
 
 		args[i] = string(buf[:argLen])
+		originalCommand += args[i] + "\r\n"
 	}
-	return args, nil
+	return args, originalCommand, nil
 }
 
 func readRespLine(reader *bufio.Reader) (string, error) {

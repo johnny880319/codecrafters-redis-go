@@ -27,6 +27,10 @@ func (c *client) cmdReplconf(_ []string) []byte {
 }
 
 func (c *client) cmdPsync(_ []string) []byte {
+	c.db.mu.Lock()
+	defer c.db.mu.Unlock()
+	c.db.replicaConns = append(c.db.replicaConns, c.conn)
+
 	response := simpleString(fmt.Sprintf("FULLRESYNC %v 0", c.db.masterReplid))
 
 	emptyRDBBase64 := "UkVESVMwMDEx+glyZWRpcy12ZXIFNy4yLjD6CnJlZGlzLWJpdHPAQPo" +

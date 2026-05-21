@@ -34,11 +34,13 @@ type Database struct {
 	mu           sync.RWMutex
 	data         map[string]dbEntry
 	waiters      map[string][]chan string
+	replicaConns []net.Conn
 }
 
 type client struct {
 	db *Database
 
+	conn    net.Conn
 	isMulti bool
 	// Tracks string snapshots for WATCH; version tracking would detect modify-and-restore cases.
 	watched  map[string]string
@@ -63,16 +65,22 @@ func (db *Database) RunConnection(conn net.Conn) (err error) {
 		err = errors.Join(err, closeErr)
 	}()
 
-	client := &client{db: db, watched: make(map[string]string)}
+	client := &client{db: db, conn: conn, watched: make(map[string]string)}
 
 	reader := bufio.NewReader(conn)
 	for {
-		command, err := readCommand(reader)
+		command, originalCommand, err := readCommand(reader)
 		if err != nil {
 			return fmt.Errorf("error reading command: %w", err)
 		}
 		if len(command) == 0 {
 			continue
+		}
+		for _, replicaConn := range db.replicaConns {
+			_, err := replicaConn.Write([]byte(originalCommand))
+			if err != nil {
+				fmt.Printf("Error writing to replica: %v\n", err)
+			}
 		}
 
 		response := client.handleCommand(command)
