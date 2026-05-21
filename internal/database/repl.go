@@ -76,19 +76,33 @@ func (db *Database) RunConnection(conn net.Conn) (err error) {
 		if len(command) == 0 {
 			continue
 		}
-		for _, replicaConn := range db.replicaConns {
-			_, err := replicaConn.Write([]byte(originalCommand))
-			if err != nil {
-				fmt.Printf("Error writing to replica: %v\n", err)
-			}
-		}
 
 		response := client.handleCommand(command)
 		_, err = conn.Write(response)
 		if err != nil {
 			return fmt.Errorf("error writing response: %w", err)
 		}
+		err = db.propagateToReplicas(command, originalCommand)
+		if err != nil {
+			return err
+		}
 	}
+}
+
+func (db *Database) propagateToReplicas(command []string, originalCommand string) error {
+	switch strings.ToUpper(command[0]) {
+	case "SET", "INCR", "RPUSH", "LPUSH", "LPOP", "XADD":
+	default:
+		return nil
+	}
+
+	for _, replicaConn := range db.replicaConns {
+		_, err := replicaConn.Write([]byte(originalCommand))
+		if err != nil {
+			return fmt.Errorf("error propagating to replica: %w", err)
+		}
+	}
+	return nil
 }
 
 func (c *client) handleCommand(command []string) []byte {
