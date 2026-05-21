@@ -44,3 +44,10 @@ func (c *client) cmdPsync(_ []string) []byte {
 	response = append(response, []byte(fmt.Sprintf("$%d\r\n%s", len(emptyRDB), emptyRDB))...)
 	return response
 }
+
+func (c *client) cmdWait(args []string) []byte {
+	if len(args) != 2 {
+		return simpleError("wrong number of arguments for 'WAIT' command")
+	}
+	return respInteger(0)
+}

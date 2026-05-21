@@ -166,6 +166,8 @@ func (c *client) executeCommand(command []string) []byte {
 		return c.cmdReplconf(args)
 	case "PSYNC":
 		return c.cmdPsync(args)
+	case "WAIT":
+		return c.cmdWait(args)
 	default:
 		return []byte("-ERR unknown command\r\n")
 	}
