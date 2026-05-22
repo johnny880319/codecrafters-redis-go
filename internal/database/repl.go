@@ -92,6 +92,9 @@ func (db *Database) RunConnection(conn net.Conn) (err error) {
 		if err != nil {
 			return fmt.Errorf("error writing response: %w", err)
 		}
+		if response[0] == '-' {
+			continue
+		}
 		err = client.propagateToReplicas(command, originalCommand)
 		if err != nil {
 			return err
