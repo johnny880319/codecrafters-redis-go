@@ -34,14 +34,16 @@ type Database struct {
 	mu           sync.RWMutex
 	data         map[string]dbEntry
 	waiters      map[string][]chan string
-	replicaConns []net.Conn
+	clients      []*client
 }
 
 type client struct {
 	db *Database
 
-	conn    net.Conn
-	isMulti bool
+	conn          net.Conn
+	offset        int
+	replicaOffset int
+	isMulti       bool
 	// Tracks string snapshots for WATCH; version tracking would detect modify-and-restore cases.
 	watched  map[string]string
 	cmdQueue [][]string
@@ -78,30 +80,32 @@ func (db *Database) RunConnection(conn net.Conn) (err error) {
 		}
 
 		response := client.handleCommand(command)
+		fmt.Printf("Received command: %v, responding with: %s", command, response)
 		_, err = conn.Write(response)
 		if err != nil {
 			return fmt.Errorf("error writing response: %w", err)
 		}
-		err = db.propagateToReplicas(command, originalCommand)
+		err = client.propagateToReplicas(command, originalCommand)
 		if err != nil {
 			return err
 		}
 	}
 }
 
-func (db *Database) propagateToReplicas(command []string, originalCommand string) error {
+func (c *client) propagateToReplicas(command []string, originalCommand string) error {
 	switch strings.ToUpper(command[0]) {
 	case "SET", "INCR", "RPUSH", "LPUSH", "LPOP", "XADD":
 	default:
 		return nil
 	}
 
-	for _, replicaConn := range db.replicaConns {
-		_, err := replicaConn.Write([]byte(originalCommand))
+	for _, replicaClient := range c.db.clients {
+		_, err := replicaClient.conn.Write([]byte(originalCommand))
 		if err != nil {
 			return fmt.Errorf("error propagating to replica: %w", err)
 		}
 	}
+	c.offset += len(originalCommand)
 	return nil
 }
 
