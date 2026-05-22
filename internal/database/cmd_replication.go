@@ -52,16 +52,25 @@ func (c *client) cmdPsync(_ []string) []byte {
 
 	response := simpleString(fmt.Sprintf("FULLRESYNC %v 0", c.db.masterReplid))
 
+	emptyRDB, err := emptyRDBPayload()
+	if err != nil {
+		return simpleError("error generating empty RDB payload")
+	}
+
+	response = append(response, []byte(fmt.Sprintf("$%d\r\n", len(emptyRDB)))...)
+	response = append(response, emptyRDB...)
+	return response
+}
+
+func emptyRDBPayload() ([]byte, error) {
 	emptyRDBBase64 := "UkVESVMwMDEx+glyZWRpcy12ZXIFNy4yLjD6CnJlZGlzLWJpdHPAQPo" +
 		"FY3RpbWXCbQi8ZfoIdXNlZC1tZW3CsMQQAPoIYW9mLWJhc2XAAP/wbjv+wP9aog=="
 
 	emptyRDB, err := base64.StdEncoding.DecodeString(emptyRDBBase64)
 	if err != nil {
-		return simpleError("failed to decode empty RDB data")
+		return nil, fmt.Errorf("failed to decode empty RDB data: %w", err)
 	}
-
-	response = append(response, []byte(fmt.Sprintf("$%d\r\n%s", len(emptyRDB), emptyRDB))...)
-	return response
+	return emptyRDB, nil
 }
 
 func (c *client) cmdWait(args []string) []byte {
