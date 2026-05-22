@@ -14,7 +14,7 @@ func (c *client) cmdInfo(args []string) []byte {
 	switch args[0] {
 	case "replication":
 		return bulkString(
-			fmt.Sprintf("role:%v\n", c.db.role)+
+			fmt.Sprintf("role:%v\n", c.db.config.Role)+
 				fmt.Sprintf("master_replid:%v\n", c.db.masterReplid)+
 				"master_repl_offset:0\n",
 			true,
@@ -48,7 +48,7 @@ func (c *client) cmdReplconf(args []string) []byte {
 func (c *client) cmdPsync(_ []string) []byte {
 	c.db.mu.Lock()
 	defer c.db.mu.Unlock()
-	c.db.clients = append(c.db.clients, c)
+	c.db.replicas = append(c.db.replicas, c)
 
 	response := simpleString(fmt.Sprintf("FULLRESYNC %v 0", c.db.masterReplid))
 
@@ -77,8 +77,8 @@ func (c *client) cmdWait(args []string) []byte {
 		return simpleError("invalid timeout value")
 	}
 
-	for _, replicaClient := range c.db.clients {
-		if _, err := replicaClient.conn.Write(respArray([][]byte{
+	for _, replica := range c.db.replicas {
+		if _, err := replica.conn.Write(respArray([][]byte{
 			bulkString("REPLCONF", true),
 			bulkString("GETACK", true),
 			bulkString("*", true),
@@ -92,8 +92,8 @@ func (c *client) cmdWait(args []string) []byte {
 
 	for {
 		syncCount := 0
-		for _, replicaClient := range c.db.clients {
-			if replicaClient.replicaOffset >= c.offset {
+		for _, replica := range c.db.replicas {
+			if replica.replicaOffset >= c.offset {
 				syncCount++
 			}
 		}

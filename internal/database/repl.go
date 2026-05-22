@@ -10,6 +10,13 @@ import (
 	"time"
 )
 
+// DBConfig holds the configuration for the Database, including role, port, and master address.
+type DBConfig struct {
+	Role       string
+	Port       string
+	MasterAddr string
+}
+
 // ValueType represents the type of value stored in the database (e.g., string, list).
 type ValueType int
 
@@ -28,13 +35,12 @@ type dbEntry struct {
 
 // Database represents an in-memory key-value store with command handling capabilities.
 type Database struct {
-	role         string
-	port         string
+	config       DBConfig
 	masterReplid string
 	mu           sync.RWMutex
 	data         map[string]dbEntry
 	waiters      map[string][]chan string
-	clients      []*client
+	replicas     []*client
 }
 
 type client struct {
@@ -50,10 +56,9 @@ type client struct {
 }
 
 // NewDatabase initializes and returns a new Database instance.
-func NewDatabase(role string, port string) *Database {
+func NewDatabase(config DBConfig) *Database {
 	return &Database{
-		role:         role,
-		port:         port,
+		config:       config,
 		masterReplid: "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb",
 		data:         make(map[string]dbEntry),
 		waiters:      make(map[string][]chan string),
@@ -80,7 +85,9 @@ func (db *Database) RunConnection(conn net.Conn) (err error) {
 		}
 
 		response := client.handleCommand(command)
-		fmt.Printf("Received command: %v, responding with: %s", command, response)
+		if len(response) == 0 {
+			continue
+		}
 		_, err = conn.Write(response)
 		if err != nil {
 			return fmt.Errorf("error writing response: %w", err)
@@ -99,7 +106,7 @@ func (c *client) propagateToReplicas(command []string, originalCommand string) e
 		return nil
 	}
 
-	for _, replicaClient := range c.db.clients {
+	for _, replicaClient := range c.db.replicas {
 		_, err := replicaClient.conn.Write([]byte(originalCommand))
 		if err != nil {
 			return fmt.Errorf("error propagating to replica: %w", err)
