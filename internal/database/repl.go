@@ -10,6 +10,13 @@ import (
 	"time"
 )
 
+// DBConfig holds the configuration for the Database, including role, port, and master address.
+type DBConfig struct {
+	Role       string
+	Port       string
+	MasterAddr string
+}
+
 // ValueType represents the type of value stored in the database (e.g., string, list).
 type ValueType int
 
@@ -28,25 +35,33 @@ type dbEntry struct {
 
 // Database represents an in-memory key-value store with command handling capabilities.
 type Database struct {
-	mu      sync.RWMutex
-	data    map[string]dbEntry
-	waiters map[string][]chan string
+	config       DBConfig
+	masterReplid string
+	mu           sync.RWMutex
+	data         map[string]dbEntry
+	waiters      map[string][]chan string
+	replicas     []*client
 }
 
 type client struct {
 	db *Database
 
-	isMulti bool
+	conn          net.Conn
+	offset        int
+	replicaOffset int
+	isMulti       bool
 	// Tracks string snapshots for WATCH; version tracking would detect modify-and-restore cases.
 	watched  map[string]string
 	cmdQueue [][]string
 }
 
 // NewDatabase initializes and returns a new Database instance.
-func NewDatabase() *Database {
+func NewDatabase(config DBConfig) *Database {
 	return &Database{
-		data:    make(map[string]dbEntry),
-		waiters: make(map[string][]chan string),
+		config:       config,
+		masterReplid: "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb",
+		data:         make(map[string]dbEntry),
+		waiters:      make(map[string][]chan string),
 	}
 }
 
@@ -57,11 +72,11 @@ func (db *Database) RunConnection(conn net.Conn) (err error) {
 		err = errors.Join(err, closeErr)
 	}()
 
-	client := &client{db: db, watched: make(map[string]string)}
+	client := &client{db: db, conn: conn, watched: make(map[string]string)}
 
 	reader := bufio.NewReader(conn)
 	for {
-		command, err := readCommand(reader)
+		command, originalCommand, err := readCommand(reader)
 		if err != nil {
 			return fmt.Errorf("error reading command: %w", err)
 		}
@@ -70,25 +85,52 @@ func (db *Database) RunConnection(conn net.Conn) (err error) {
 		}
 
 		response := client.handleCommand(command)
+		if len(response) == 0 {
+			continue
+		}
 		_, err = conn.Write(response)
 		if err != nil {
 			return fmt.Errorf("error writing response: %w", err)
 		}
+		if response[0] == '-' {
+			continue
+		}
+		err = client.propagateToReplicas(command, originalCommand)
+		if err != nil {
+			return err
+		}
 	}
+}
+
+func (c *client) propagateToReplicas(command []string, originalCommand string) error {
+	switch strings.ToUpper(command[0]) {
+	case "SET", "INCR", "RPUSH", "LPUSH", "LPOP", "XADD":
+	default:
+		return nil
+	}
+
+	for _, replicaClient := range c.db.replicas {
+		_, err := replicaClient.conn.Write([]byte(originalCommand))
+		if err != nil {
+			return fmt.Errorf("error propagating to replica: %w", err)
+		}
+	}
+	c.offset += len(originalCommand)
+	return nil
 }
 
 func (c *client) handleCommand(command []string) []byte {
 	cmd, args := command[0], command[1:]
-	switch strings.ToLower(cmd) {
-	case "multi":
+	switch strings.ToUpper(cmd) {
+	case "MULTI":
 		return c.cmdMulti(args)
-	case "exec":
+	case "EXEC":
 		return c.cmdExec(args)
-	case "discard":
+	case "DISCARD":
 		return c.cmdDiscard(args)
-	case "watch":
+	case "WATCH":
 		return c.cmdWatch(args)
-	case "unwatch":
+	case "UNWATCH":
 		return c.cmdUnwatch(args)
 	}
 
@@ -101,37 +143,45 @@ func (c *client) handleCommand(command []string) []byte {
 
 func (c *client) executeCommand(command []string) []byte {
 	cmd, args := command[0], command[1:]
-	switch strings.ToLower(cmd) {
-	case "ping":
+	switch strings.ToUpper(cmd) {
+	case "PING":
 		return c.cmdPing(args)
-	case "echo":
+	case "ECHO":
 		return c.cmdEcho(args)
-	case "set":
+	case "SET":
 		return c.cmdSet(args)
-	case "get":
+	case "GET":
 		return c.cmdGet(args)
-	case "type":
+	case "TYPE":
 		return c.cmdType(args)
-	case "rpush":
-		return c.cmdRpush(args)
-	case "lpush":
-		return c.cmdLpush(args)
-	case "lpop":
-		return c.cmdLpop(args)
-	case "blpop":
-		return c.cmdBLpop(args)
-	case "lrange":
-		return c.cmdLrange(args)
-	case "llen":
-		return c.cmdLlen(args)
-	case "xadd":
-		return c.cmdXadd(args)
-	case "xrange":
-		return c.cmdXrange(args)
-	case "xread":
-		return c.cmdXread(args)
-	case "incr":
+	case "INCR":
 		return c.cmdIncr(args)
+	case "RPUSH":
+		return c.cmdRpush(args)
+	case "LPUSH":
+		return c.cmdLpush(args)
+	case "LPOP":
+		return c.cmdLpop(args)
+	case "BLPOP":
+		return c.cmdBLpop(args)
+	case "LRANGE":
+		return c.cmdLrange(args)
+	case "LLEN":
+		return c.cmdLlen(args)
+	case "XADD":
+		return c.cmdXadd(args)
+	case "XRANGE":
+		return c.cmdXrange(args)
+	case "XREAD":
+		return c.cmdXread(args)
+	case "INFO":
+		return c.cmdInfo(args)
+	case "REPLCONF":
+		return c.cmdReplconf(args)
+	case "PSYNC":
+		return c.cmdPsync(args)
+	case "WAIT":
+		return c.cmdWait(args)
 	default:
 		return []byte("-ERR unknown command\r\n")
 	}
