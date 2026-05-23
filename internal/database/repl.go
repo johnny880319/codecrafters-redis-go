@@ -15,6 +15,8 @@ type DBConfig struct {
 	Role       string
 	Port       string
 	MasterAddr string
+	Dir        string
+	DBFilename string
 }
 
 // ValueType represents the type of value stored in the database (e.g., string, list).
@@ -156,6 +158,8 @@ func (c *client) executeCommand(command []string) []byte {
 		return c.cmdType(args)
 	case "INCR":
 		return c.cmdIncr(args)
+	case "CONFIG":
+		return c.cmdConfig(args)
 	case "RPUSH":
 		return c.cmdRpush(args)
 	case "LPUSH":
