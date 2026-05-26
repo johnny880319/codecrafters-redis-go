@@ -12,11 +12,15 @@ import (
 
 // DBConfig holds the configuration for the Database, including role, port, and master address.
 type DBConfig struct {
-	Role       string
-	Port       string
-	MasterAddr string
-	Dir        string
-	DBFilename string
+	Role           string
+	Port           string
+	MasterAddr     string
+	Dir            string
+	DBFilename     string
+	Appendonly     string
+	Appenddirname  string
+	Appendfilename string
+	Appendfsync    string
 }
 
 // ValueType represents the type of value stored in the database (e.g., string, list).

@@ -139,6 +139,14 @@ func (c *client) cmdConfig(args []string) []byte {
 			return respArray([][]byte{bulkString("dir", true), bulkString(c.db.config.Dir, true)})
 		case "dbfilename":
 			return respArray([][]byte{bulkString("dbfilename", true), bulkString(c.db.config.DBFilename, true)})
+		case "appendonly":
+			return respArray([][]byte{bulkString("appendonly", true), bulkString(c.db.config.Appendonly, true)})
+		case "appenddirname":
+			return respArray([][]byte{bulkString("appenddirname", true), bulkString(c.db.config.Appenddirname, true)})
+		case "appendfilename":
+			return respArray([][]byte{bulkString("appendfilename", true), bulkString(c.db.config.Appendfilename, true)})
+		case "appendfsync":
+			return respArray([][]byte{bulkString("appendfsync", true), bulkString(c.db.config.Appendfsync, true)})
 		default:
 			return simpleError("unsupported CONFIG subcommand")
 		}
