@@ -18,7 +18,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	db := database.NewDatabase(dbConfig)
+	db, err := database.NewDatabase(dbConfig)
+	if err != nil {
+		fmt.Println("Error initializing database: ", err.Error())
+		os.Exit(1)
+	}
 
 	lc := net.ListenConfig{}
 

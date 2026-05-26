@@ -146,3 +146,17 @@ func (c *client) cmdConfig(args []string) []byte {
 		return simpleError("unsupported CONFIG subcommand")
 	}
 }
+
+func (c *client) cmdKeys(args []string) []byte {
+	c.db.mu.Lock()
+	defer c.db.mu.Unlock()
+
+	if len(args) != 1 || args[0] != "*" {
+		return simpleError("wrong number of arguments for 'KEYS' command or unsupported pattern")
+	}
+	keys := make([][]byte, 0, len(c.db.data))
+	for key := range c.db.data {
+		keys = append(keys, bulkString(key, true))
+	}
+	return respArray(keys)
+}

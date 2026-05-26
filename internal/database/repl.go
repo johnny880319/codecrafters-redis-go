@@ -58,13 +58,17 @@ type client struct {
 }
 
 // NewDatabase initializes and returns a new Database instance.
-func NewDatabase(config DBConfig) *Database {
+func NewDatabase(config DBConfig) (*Database, error) {
+	data, err := readRDBFile(config)
+	if err != nil {
+		return nil, fmt.Errorf("error initializing database: %w", err)
+	}
 	return &Database{
 		config:       config,
 		masterReplid: "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb",
-		data:         make(map[string]dbEntry),
+		data:         data,
 		waiters:      make(map[string][]chan string),
-	}
+	}, nil
 }
 
 // RunConnection handles a single client connection, reading commands and writing responses.
@@ -160,6 +164,8 @@ func (c *client) executeCommand(command []string) []byte {
 		return c.cmdIncr(args)
 	case "CONFIG":
 		return c.cmdConfig(args)
+	case "KEYS":
+		return c.cmdKeys(args)
 	case "RPUSH":
 		return c.cmdRpush(args)
 	case "LPUSH":
