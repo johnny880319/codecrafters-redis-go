@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 )
 
@@ -25,7 +26,7 @@ func readRDBFile(config DBConfig) (map[string]dbEntry, error) {
 
 func parseRDBBytes(data []byte) (map[string]dbEntry, error) {
 	offset := 0
-	var entries map[string]dbEntry
+	entries := make(map[string]dbEntry)
 
 	offset, err := parseRDBHeader(data, offset)
 	if err != nil {
@@ -43,7 +44,7 @@ func parseRDBBytes(data []byte) (map[string]dbEntry, error) {
 			return nil, fmt.Errorf("error parsing RDB entry: %w", err)
 		}
 		offset = newOffset
-		if entries == nil {
+		if len(entries) == 0 {
 			entries = parsedEntries
 		}
 	}
@@ -156,18 +157,25 @@ func parseRDBString(data []byte, offset int) (string, int, error) {
 		if len(data) <= offset+1 {
 			return "", 0, fmt.Errorf("unexpected end of RDB data")
 		}
-		return string(data[offset+1 : offset+2]), offset + 2, nil
+		//nolint:gosec // This is redis behavior, we can assume the value will not overflow
+		return strconv.Itoa(int(int8(data[offset+1]))), offset + 2, nil
 	case 0xC1:
 		if len(data) <= offset+2 {
 			return "", 0, fmt.Errorf("unexpected end of RDB data")
 		}
-		return string([]byte{data[offset+2], data[offset+1]}), offset + 3, nil
+		// little endian
+		return strconv.Itoa(int(int16(data[offset+2])<<8 | int16(data[offset+1]))), offset + 3, nil
 	case 0xC2:
 		if len(data) <= offset+4 {
 			return "", 0, fmt.Errorf("unexpected end of RDB data")
 		}
-		return string([]byte{data[offset+4], data[offset+3], data[offset+2], data[offset+1]}),
-			offset + 5, nil
+		// little endian
+		return strconv.Itoa(int(
+			int32(data[offset+4])<<24 |
+				int32(data[offset+3])<<16 |
+				int32(data[offset+2])<<8 |
+				int32(data[offset+1]),
+		)), offset + 5, nil
 	}
 
 	length, newOffset, err := parseRDBLength(data, offset)

@@ -108,21 +108,28 @@ func (db *Database) RunConnection(conn net.Conn) (err error) {
 	}
 }
 
-func (c *client) propagateToReplicas(command []string, originalCommand string) error {
-	switch strings.ToUpper(command[0]) {
-	case "SET", "INCR", "RPUSH", "LPUSH", "LPOP", "XADD":
-	default:
+func (c *client) propagateToReplicas(command []string, originalCommand []byte) error {
+	if !isWriteCommand(command[0]) {
 		return nil
 	}
 
 	for _, replicaClient := range c.db.replicas {
-		_, err := replicaClient.conn.Write([]byte(originalCommand))
+		_, err := replicaClient.conn.Write(originalCommand)
 		if err != nil {
 			return fmt.Errorf("error propagating to replica: %w", err)
 		}
 	}
 	c.offset += len(originalCommand)
 	return nil
+}
+
+func isWriteCommand(cmd string) bool {
+	switch strings.ToUpper(cmd) {
+	case "SET", "INCR", "RPUSH", "LPUSH", "LPOP", "XADD":
+		return true
+	default:
+		return false
+	}
 }
 
 func (c *client) handleCommand(command []string) []byte {
