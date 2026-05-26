@@ -18,7 +18,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	db := database.NewDatabase(dbConfig)
+	db, err := database.NewDatabase(dbConfig)
+	if err != nil {
+		fmt.Println("Error initializing database: ", err.Error())
+		os.Exit(1)
+	}
 
 	lc := net.ListenConfig{}
 
@@ -60,33 +64,27 @@ func main() {
 }
 
 func parseArgs(args []string) (database.DBConfig, error) {
-	port := "6379"
-	role := "master"
-	masterAddr := ""
-	for i := 0; i < len(args); i++ {
+	dbConfig := database.DBConfig{
+		Port: "6379",
+		Role: "master",
+	}
+
+	for i := 0; i+1 < len(args); i += 2 {
 		switch args[i] {
 		case "--port":
-			if len(args) <= i+1 {
-				return database.DBConfig{}, fmt.Errorf("missing value for --port")
-			}
-			port = args[i+1]
-			i++
+			dbConfig.Port = args[i+1]
 		case "--replicaof":
-			if len(args) <= i+1 {
-				return database.DBConfig{}, fmt.Errorf("missing value for --replicaof")
-			}
-			role = "slave"
+			dbConfig.Role = "slave"
 			parts := strings.Fields(args[i+1])
 			if len(parts) != 2 {
 				return database.DBConfig{}, fmt.Errorf("invalid value for --replicaof")
 			}
-			masterAddr = net.JoinHostPort(parts[0], parts[1])
-			i++
+			dbConfig.MasterAddr = net.JoinHostPort(parts[0], parts[1])
+		case "--dir":
+			dbConfig.Dir = args[i+1]
+		case "--dbfilename":
+			dbConfig.DBFilename = args[i+1]
 		}
 	}
-	return database.DBConfig{
-		Role:       role,
-		Port:       port,
-		MasterAddr: masterAddr,
-	}, nil
+	return dbConfig, nil
 }

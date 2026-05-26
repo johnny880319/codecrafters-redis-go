@@ -15,6 +15,8 @@ type DBConfig struct {
 	Role       string
 	Port       string
 	MasterAddr string
+	Dir        string
+	DBFilename string
 }
 
 // ValueType represents the type of value stored in the database (e.g., string, list).
@@ -56,13 +58,17 @@ type client struct {
 }
 
 // NewDatabase initializes and returns a new Database instance.
-func NewDatabase(config DBConfig) *Database {
+func NewDatabase(config DBConfig) (*Database, error) {
+	data, err := readRDBFile(config)
+	if err != nil {
+		return nil, fmt.Errorf("error initializing database: %w", err)
+	}
 	return &Database{
 		config:       config,
 		masterReplid: "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb",
-		data:         make(map[string]dbEntry),
+		data:         data,
 		waiters:      make(map[string][]chan string),
-	}
+	}, nil
 }
 
 // RunConnection handles a single client connection, reading commands and writing responses.
@@ -102,21 +108,28 @@ func (db *Database) RunConnection(conn net.Conn) (err error) {
 	}
 }
 
-func (c *client) propagateToReplicas(command []string, originalCommand string) error {
-	switch strings.ToUpper(command[0]) {
-	case "SET", "INCR", "RPUSH", "LPUSH", "LPOP", "XADD":
-	default:
+func (c *client) propagateToReplicas(command []string, originalCommand []byte) error {
+	if !isWriteCommand(command[0]) {
 		return nil
 	}
 
 	for _, replicaClient := range c.db.replicas {
-		_, err := replicaClient.conn.Write([]byte(originalCommand))
+		_, err := replicaClient.conn.Write(originalCommand)
 		if err != nil {
 			return fmt.Errorf("error propagating to replica: %w", err)
 		}
 	}
 	c.offset += len(originalCommand)
 	return nil
+}
+
+func isWriteCommand(cmd string) bool {
+	switch strings.ToUpper(cmd) {
+	case "SET", "INCR", "RPUSH", "LPUSH", "LPOP", "XADD":
+		return true
+	default:
+		return false
+	}
 }
 
 func (c *client) handleCommand(command []string) []byte {
@@ -156,6 +169,10 @@ func (c *client) executeCommand(command []string) []byte {
 		return c.cmdType(args)
 	case "INCR":
 		return c.cmdIncr(args)
+	case "CONFIG":
+		return c.cmdConfig(args)
+	case "KEYS":
+		return c.cmdKeys(args)
 	case "RPUSH":
 		return c.cmdRpush(args)
 	case "LPUSH":

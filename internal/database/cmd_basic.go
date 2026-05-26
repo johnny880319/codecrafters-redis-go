@@ -127,3 +127,36 @@ func (c *client) cmdIncr(args []string) []byte {
 	c.db.data[key] = entry
 	return respInteger(contentInt)
 }
+
+func (c *client) cmdConfig(args []string) []byte {
+	if len(args) != 2 {
+		return simpleError("wrong number of arguments for 'CONFIG' command")
+	}
+	switch strings.ToUpper(args[0]) {
+	case "GET":
+		switch strings.ToLower(args[1]) {
+		case "dir":
+			return respArray([][]byte{bulkString("dir", true), bulkString(c.db.config.Dir, true)})
+		case "dbfilename":
+			return respArray([][]byte{bulkString("dbfilename", true), bulkString(c.db.config.DBFilename, true)})
+		default:
+			return simpleError("unsupported CONFIG subcommand")
+		}
+	default:
+		return simpleError("unsupported CONFIG subcommand")
+	}
+}
+
+func (c *client) cmdKeys(args []string) []byte {
+	c.db.mu.Lock()
+	defer c.db.mu.Unlock()
+
+	if len(args) != 1 || args[0] != "*" {
+		return simpleError("wrong number of arguments for 'KEYS' command or unsupported pattern")
+	}
+	keys := make([][]byte, 0, len(c.db.data))
+	for key := range c.db.data {
+		keys = append(keys, bulkString(key, true))
+	}
+	return respArray(keys)
+}
