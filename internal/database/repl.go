@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -63,6 +65,10 @@ type client struct {
 
 // NewDatabase initializes and returns a new Database instance.
 func NewDatabase(config DBConfig) (*Database, error) {
+	err := creatAppendOnlyFile(config)
+	if err != nil {
+		return nil, fmt.Errorf("error initializing database: %w", err)
+	}
 	data, err := readRDBFile(config)
 	if err != nil {
 		return nil, fmt.Errorf("error initializing database: %w", err)
@@ -73,6 +79,20 @@ func NewDatabase(config DBConfig) (*Database, error) {
 		data:         data,
 		waiters:      make(map[string][]chan string),
 	}, nil
+}
+
+func creatAppendOnlyFile(config DBConfig) error {
+	if config.Appendonly != "yes" {
+		return nil
+	}
+	appendOnlyPath := filepath.Join(config.Dir, config.Appenddirname)
+	if _, err := os.Stat(appendOnlyPath); os.IsNotExist(err) {
+		err := os.Mkdir(appendOnlyPath, 0o750)
+		if err != nil {
+			return fmt.Errorf("error creating appendonly directory: %w", err)
+		}
+	}
+	return nil
 }
 
 // RunConnection handles a single client connection, reading commands and writing responses.
