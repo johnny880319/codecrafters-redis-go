@@ -85,12 +85,16 @@ func creatAppendOnlyFile(config DBConfig) error {
 	if config.Appendonly != "yes" {
 		return nil
 	}
-	appendOnlyPath := filepath.Join(config.Dir, config.Appenddirname, config.Appendfilename+".1.incr.aof")
-	if _, err := os.Stat(appendOnlyPath); os.IsNotExist(err) {
-		err = os.MkdirAll(filepath.Join(config.Dir, config.Appenddirname), 0o750)
+	appendOnlyDir := filepath.Join(config.Dir, config.Appenddirname)
+	if _, err := os.Stat(appendOnlyDir); os.IsNotExist(err) {
+		err = os.MkdirAll(appendOnlyDir, 0o750)
 		if err != nil {
 			return fmt.Errorf("error creating appendonly directory: %w", err)
 		}
+	}
+
+	appendOnlyPath := filepath.Join(appendOnlyDir, config.Appendfilename+".1.incr.aof")
+	if _, err := os.Stat(appendOnlyPath); os.IsNotExist(err) {
 		//nolint:gosec // This is redis behavior, we can assume the filename is safe
 		file, err := os.Create(appendOnlyPath)
 		if err != nil {
@@ -101,6 +105,25 @@ func creatAppendOnlyFile(config DBConfig) error {
 			return fmt.Errorf("error closing appendonly file: %w", err)
 		}
 	}
+
+	manifestPath := filepath.Join(appendOnlyDir, config.Appendfilename+".manifest")
+	if _, err := os.Stat(manifestPath); os.IsNotExist(err) {
+		//nolint:gosec // This is redis behavior, we can assume the filename is safe
+		file, err := os.Create(manifestPath)
+		if err != nil {
+			return fmt.Errorf("error creating appendonly manifest file: %w", err)
+		}
+		description := fmt.Sprintf("file %s seq 1 type i", config.Appendfilename+".1.incr.aof")
+		_, err = file.WriteString(description)
+		if err != nil {
+			return fmt.Errorf("error writing to appendonly manifest file: %w", err)
+		}
+		err = file.Close()
+		if err != nil {
+			return fmt.Errorf("error closing appendonly manifest file: %w", err)
+		}
+	}
+
 	return nil
 }
 
