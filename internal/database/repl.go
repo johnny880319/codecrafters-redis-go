@@ -85,11 +85,20 @@ func creatAppendOnlyFile(config DBConfig) error {
 	if config.Appendonly != "yes" {
 		return nil
 	}
-	appendOnlyPath := filepath.Join(config.Dir, config.Appenddirname)
+	appendOnlyPath := filepath.Join(config.Dir, config.Appenddirname, config.Appendfilename+".1.incr.aof")
 	if _, err := os.Stat(appendOnlyPath); os.IsNotExist(err) {
-		err := os.Mkdir(appendOnlyPath, 0o750)
+		err = os.MkdirAll(filepath.Join(config.Dir, config.Appenddirname), 0o750)
 		if err != nil {
 			return fmt.Errorf("error creating appendonly directory: %w", err)
+		}
+		//nolint:gosec // This is redis behavior, we can assume the filename is safe
+		file, err := os.Create(appendOnlyPath)
+		if err != nil {
+			return fmt.Errorf("error creating appendonly file: %w", err)
+		}
+		err = file.Close()
+		if err != nil {
+			return fmt.Errorf("error closing appendonly file: %w", err)
 		}
 	}
 	return nil
