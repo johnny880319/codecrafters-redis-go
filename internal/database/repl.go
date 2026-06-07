@@ -49,6 +49,7 @@ type Database struct {
 	data         map[string]dbEntry
 	waiters      map[string][]chan string
 	replicas     []*client
+	aofFile      *os.File
 }
 
 type client struct {
@@ -65,23 +66,23 @@ type client struct {
 
 // NewDatabase initializes and returns a new Database instance.
 func NewDatabase(config DBConfig) (*Database, error) {
-	err := creatAppendOnlyFile(config)
-	if err != nil {
-		return nil, fmt.Errorf("error initializing database: %w", err)
-	}
-	data, err := readRDBFile(config)
-	if err != nil {
-		return nil, fmt.Errorf("error initializing database: %w", err)
-	}
-	return &Database{
+	db := &Database{
 		config:       config,
 		masterReplid: "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb",
-		data:         data,
 		waiters:      make(map[string][]chan string),
-	}, nil
+		data:         make(map[string]dbEntry),
+	}
+	if err := db.initializeAppendOnlyFile(config); err != nil {
+		return nil, fmt.Errorf("error initializing database: %w", err)
+	}
+	if err := db.readRDBFile(config); err != nil {
+		return nil, fmt.Errorf("error initializing database: %w", err)
+	}
+	return db, nil
 }
 
-func creatAppendOnlyFile(config DBConfig) error {
+//nolint:gocognit // Will refactor in the future.
+func (db *Database) initializeAppendOnlyFile(config DBConfig) error {
 	if config.Appendonly != "yes" {
 		return nil
 	}
@@ -94,19 +95,28 @@ func creatAppendOnlyFile(config DBConfig) error {
 	}
 
 	appendOnlyPath := filepath.Join(appendOnlyDir, config.Appendfilename+".1.incr.aof")
-	if _, err := os.Stat(appendOnlyPath); os.IsNotExist(err) {
+	manifestPath := filepath.Join(appendOnlyDir, config.Appendfilename+".manifest")
+	// if exists, extract the appendonly file name.
+	if _, err := os.Stat(manifestPath); err == nil {
 		//nolint:gosec // This is redis behavior, we can assume the filename is safe
-		file, err := os.Create(appendOnlyPath)
+		content, err := os.ReadFile(manifestPath)
 		if err != nil {
-			return fmt.Errorf("error creating appendonly file: %w", err)
+			return fmt.Errorf("error reading appendonly manifest file: %w", err)
 		}
-		err = file.Close()
-		if err != nil {
-			return fmt.Errorf("error closing appendonly file: %w", err)
+		for _, line := range strings.Split(string(content), "\n") {
+			// file <filename> seq <number> type <type>
+			parts := strings.Fields(line)
+			if len(parts) != 6 || parts[0] != "file" || parts[2] != "seq" || parts[4] != "type" {
+				continue
+			}
+			if parts[5] != "i" {
+				continue
+			}
+			appendOnlyPath = filepath.Join(appendOnlyDir, parts[1])
+			break
 		}
 	}
 
-	manifestPath := filepath.Join(appendOnlyDir, config.Appendfilename+".manifest")
 	if _, err := os.Stat(manifestPath); os.IsNotExist(err) {
 		//nolint:gosec // This is redis behavior, we can assume the filename is safe
 		file, err := os.Create(manifestPath)
@@ -124,6 +134,24 @@ func creatAppendOnlyFile(config DBConfig) error {
 		}
 	}
 
+	if _, err := os.Stat(appendOnlyPath); os.IsNotExist(err) {
+		//nolint:gosec // This is redis behavior, we can assume the filename is safe
+		file, err := os.Create(appendOnlyPath)
+		if err != nil {
+			return fmt.Errorf("error creating appendonly file: %w", err)
+		}
+		err = file.Close()
+		if err != nil {
+			return fmt.Errorf("error closing appendonly file: %w", err)
+		}
+	}
+
+	//nolint:gosec // This is redis behavior, we can assume the filename is safe
+	aofFile, err := os.OpenFile(appendOnlyPath, os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		return fmt.Errorf("error opening appendonly file: %w", err)
+	}
+	db.aofFile = aofFile
 	return nil
 }
 
@@ -150,6 +178,10 @@ func (db *Database) RunConnection(conn net.Conn) (err error) {
 		if len(response) == 0 {
 			continue
 		}
+		err = client.appendFSync(command, originalCommand)
+		if err != nil {
+			return err
+		}
 		_, err = conn.Write(response)
 		if err != nil {
 			return fmt.Errorf("error writing response: %w", err)
@@ -162,6 +194,29 @@ func (db *Database) RunConnection(conn net.Conn) (err error) {
 			return err
 		}
 	}
+}
+
+func (c *client) appendFSync(command []string, originalCommand []byte) error {
+	if c.db.config.Appendonly != "yes" {
+		return nil
+	}
+	if !isWriteCommand(command[0]) {
+		return nil
+	}
+	if c.db.aofFile == nil {
+		return fmt.Errorf("appendonly file is not initialized")
+	}
+	_, err := c.db.aofFile.Write(originalCommand)
+	if err != nil {
+		return fmt.Errorf("error writing to appendonly file: %w", err)
+	}
+	if c.db.config.Appendfsync == "always" {
+		err = c.db.aofFile.Sync()
+		if err != nil {
+			return fmt.Errorf("error syncing appendonly file: %w", err)
+		}
+	}
+	return nil
 }
 
 func (c *client) propagateToReplicas(command []string, originalCommand []byte) error {
