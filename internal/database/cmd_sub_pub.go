@@ -21,6 +21,29 @@ func (c *client) cmdSubscribe(args []string) []byte {
 	})
 }
 
+func (c *client) cmdUnsubscribe(args []string) []byte {
+	if len(args) != 1 {
+		return simpleError("wrong number of arguments for 'UNSUBSCRIBE' command")
+	}
+	channel := args[0]
+
+	c.db.rwMu.Lock()
+	if subscribers, exists := c.db.subscribers[channel]; exists {
+		delete(subscribers, c)
+		if len(subscribers) == 0 {
+			delete(c.db.subscribers, channel)
+		}
+	}
+	delete(c.subscribedChannels, channel)
+	c.db.rwMu.Unlock()
+
+	return respArray([][]byte{
+		bulkString("unsubscribe", true),
+		bulkString(channel, true),
+		respInteger(len(c.subscribedChannels)),
+	})
+}
+
 func (c *client) cmdPublish(args []string) []byte {
 	if len(args) != 2 {
 		return simpleError("wrong number of arguments for 'PUBLISH' command")

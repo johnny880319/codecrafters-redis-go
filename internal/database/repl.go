@@ -237,6 +237,8 @@ func (c *client) executeCommand(command []string) []byte {
 		return c.cmdWait(args)
 	case "SUBSCRIBE":
 		return c.cmdSubscribe(args)
+	case "UNSUBSCRIBE":
+		return c.cmdUnsubscribe(args)
 	case "PUBLISH":
 		return c.cmdPublish(args)
 	default:
