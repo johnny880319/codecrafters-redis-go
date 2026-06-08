@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -72,17 +73,17 @@ func NewDatabase(config DBConfig) (*Database, error) {
 		waiters:      make(map[string][]chan string),
 		data:         make(map[string]dbEntry),
 	}
-	if err := db.initializeAppendOnlyFile(config); err != nil {
+	if err := db.readRDBFile(config); err != nil {
 		return nil, fmt.Errorf("error initializing database: %w", err)
 	}
-	if err := db.readRDBFile(config); err != nil {
+	if err := db.initializeAppendOnlyFile(config); err != nil {
 		return nil, fmt.Errorf("error initializing database: %w", err)
 	}
 	return db, nil
 }
 
 //nolint:gocognit // Will refactor in the future.
-func (db *Database) initializeAppendOnlyFile(config DBConfig) error {
+func (db *Database) initializeAppendOnlyFile(config DBConfig) (err error) {
 	if config.Appendonly != "yes" {
 		return nil
 	}
@@ -152,6 +153,34 @@ func (db *Database) initializeAppendOnlyFile(config DBConfig) error {
 		return fmt.Errorf("error opening appendonly file: %w", err)
 	}
 	db.aofFile = aofFile
+
+	//nolint:gosec // This is redis behavior, we can assume the filename is safe
+	replayFile, err := os.Open(appendOnlyPath)
+	if err != nil {
+		return fmt.Errorf("error opening appendonly file for replay: %w", err)
+	}
+	defer func() {
+		replayErr := replayFile.Close()
+		err = errors.Join(err, replayErr)
+	}()
+
+	reader := bufio.NewReader(replayFile)
+	virtualClient := &client{db: db, conn: nil, watched: make(map[string]string)}
+	for {
+		command, _, err := readCommand(reader)
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return fmt.Errorf("error reading appendonly file: %w", err)
+		}
+
+		if len(command) == 0 {
+			continue
+		}
+
+		_ = virtualClient.handleCommand(command)
+	}
 	return nil
 }
 
