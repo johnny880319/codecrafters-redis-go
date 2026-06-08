@@ -8,20 +8,24 @@ import (
 	"time"
 )
 
-func readRDBFile(config DBConfig) (map[string]dbEntry, error) {
+func (db *Database) readRDBFile(config DBConfig) error {
 	if config.Dir == "" || config.DBFilename == "" {
-		return make(map[string]dbEntry), nil
+		return nil
 	}
 	if _, err := os.Stat(filepath.Join(config.Dir, config.DBFilename)); os.IsNotExist(err) {
-		return make(map[string]dbEntry), nil
+		return nil
 	}
 
 	data, err := os.ReadFile(filepath.Join(config.Dir, config.DBFilename))
 	if err != nil {
-		return nil, fmt.Errorf("error reading RDB file: %w", err)
+		return fmt.Errorf("error reading RDB file: %w", err)
 	}
 
-	return parseRDBBytes(data)
+	db.data, err = parseRDBBytes(data)
+	if err != nil {
+		return fmt.Errorf("error parsing RDB file: %w", err)
+	}
+	return nil
 }
 
 func parseRDBBytes(data []byte) (map[string]dbEntry, error) {

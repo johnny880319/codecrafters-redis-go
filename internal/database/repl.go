@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -12,11 +13,15 @@ import (
 
 // DBConfig holds the configuration for the Database, including role, port, and master address.
 type DBConfig struct {
-	Role       string
-	Port       string
-	MasterAddr string
-	Dir        string
-	DBFilename string
+	Role           string
+	Port           string
+	MasterAddr     string
+	Dir            string
+	DBFilename     string
+	Appendonly     string
+	Appenddirname  string
+	Appendfilename string
+	Appendfsync    string
 }
 
 // ValueType represents the type of value stored in the database (e.g., string, list).
@@ -39,10 +44,12 @@ type dbEntry struct {
 type Database struct {
 	config       DBConfig
 	masterReplid string
-	mu           sync.RWMutex
+	rwMu         sync.RWMutex
 	data         map[string]dbEntry
 	waiters      map[string][]chan string
 	replicas     []*client
+	aofFile      *os.File
+	aofMu        sync.Mutex
 }
 
 type client struct {
@@ -59,16 +66,19 @@ type client struct {
 
 // NewDatabase initializes and returns a new Database instance.
 func NewDatabase(config DBConfig) (*Database, error) {
-	data, err := readRDBFile(config)
-	if err != nil {
-		return nil, fmt.Errorf("error initializing database: %w", err)
-	}
-	return &Database{
+	db := &Database{
 		config:       config,
 		masterReplid: "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb",
-		data:         data,
 		waiters:      make(map[string][]chan string),
-	}, nil
+		data:         make(map[string]dbEntry),
+	}
+	if err := db.readRDBFile(config); err != nil {
+		return nil, fmt.Errorf("error initializing database: %w", err)
+	}
+	if err := db.initAOF(config); err != nil {
+		return nil, fmt.Errorf("error initializing database: %w", err)
+	}
+	return db, nil
 }
 
 // RunConnection handles a single client connection, reading commands and writing responses.
@@ -94,22 +104,27 @@ func (db *Database) RunConnection(conn net.Conn) (err error) {
 		if len(response) == 0 {
 			continue
 		}
+		if response[0] != '-' {
+			err = client.appendAOF(command, originalCommand)
+			if err != nil {
+				return err
+			}
+		}
 		_, err = conn.Write(response)
 		if err != nil {
 			return fmt.Errorf("error writing response: %w", err)
 		}
-		if response[0] == '-' {
-			continue
-		}
-		err = client.propagateToReplicas(command, originalCommand)
-		if err != nil {
-			return err
+		if response[0] != '-' {
+			err = client.propagateToReplicas(command, originalCommand)
+			if err != nil {
+				return err
+			}
 		}
 	}
 }
 
 func (c *client) propagateToReplicas(command []string, originalCommand []byte) error {
-	if !isWriteCommand(command[0]) {
+	if !isMutatingCommand(command[0]) {
 		return nil
 	}
 
@@ -123,7 +138,7 @@ func (c *client) propagateToReplicas(command []string, originalCommand []byte) e
 	return nil
 }
 
-func isWriteCommand(cmd string) bool {
+func isMutatingCommand(cmd string) bool {
 	switch strings.ToUpper(cmd) {
 	case "SET", "INCR", "RPUSH", "LPUSH", "LPOP", "XADD":
 		return true

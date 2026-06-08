@@ -7,8 +7,8 @@ import (
 )
 
 func (c *client) cmdRpush(args []string) []byte {
-	c.db.mu.Lock()
-	defer c.db.mu.Unlock()
+	c.db.rwMu.Lock()
+	defer c.db.rwMu.Unlock()
 
 	if len(args) < 2 {
 		return simpleError("wrong number of arguments for 'RPUSH' command")
@@ -52,8 +52,8 @@ func (c *client) cmdRpush(args []string) []byte {
 }
 
 func (c *client) cmdLpush(args []string) []byte {
-	c.db.mu.Lock()
-	defer c.db.mu.Unlock()
+	c.db.rwMu.Lock()
+	defer c.db.rwMu.Unlock()
 
 	if len(args) < 2 {
 		return simpleError("wrong number of arguments for 'LPUSH' command")
@@ -100,8 +100,8 @@ func (c *client) cmdLpush(args []string) []byte {
 }
 
 func (c *client) cmdLpop(args []string) []byte {
-	c.db.mu.Lock()
-	defer c.db.mu.Unlock()
+	c.db.rwMu.Lock()
+	defer c.db.rwMu.Unlock()
 
 	if len(args) < 1 || len(args) > 2 {
 		return simpleError("wrong number of arguments for 'LPOP' command")
@@ -154,8 +154,8 @@ func (c *client) cmdBLpop(args []string) []byte {
 	var response []byte
 
 	func() {
-		c.db.mu.Lock()
-		defer c.db.mu.Unlock()
+		c.db.rwMu.Lock()
+		defer c.db.rwMu.Unlock()
 
 		content, entry, exists, err := c.db.getListEntry(key)
 		if err != nil {
@@ -195,8 +195,8 @@ func (c *client) cmdBLpop(args []string) []byte {
 	case value := <-waiter:
 		return respArray([][]byte{bulkString(key, true), bulkString(value, true)})
 	case <-timer.C:
-		c.db.mu.Lock()
-		defer c.db.mu.Unlock()
+		c.db.rwMu.Lock()
+		defer c.db.rwMu.Unlock()
 		// Remove waiter from the list
 		waiters := c.db.waiters[key]
 		for i, w := range waiters {
@@ -213,8 +213,8 @@ func (c *client) cmdBLpop(args []string) []byte {
 }
 
 func (c *client) cmdLrange(args []string) []byte {
-	c.db.mu.Lock()
-	defer c.db.mu.Unlock()
+	c.db.rwMu.Lock()
+	defer c.db.rwMu.Unlock()
 
 	if len(args) != 3 {
 		return simpleError("wrong number of arguments for 'LRANGE' command")
@@ -254,8 +254,8 @@ func (c *client) cmdLrange(args []string) []byte {
 }
 
 func (c *client) cmdLlen(args []string) []byte {
-	c.db.mu.Lock()
-	defer c.db.mu.Unlock()
+	c.db.rwMu.Lock()
+	defer c.db.rwMu.Unlock()
 	if len(args) != 1 {
 		return simpleError("wrong number of arguments for 'LLEN' command")
 	}

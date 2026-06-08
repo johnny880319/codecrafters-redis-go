@@ -8,8 +8,8 @@ import (
 )
 
 func (c *client) cmdXadd(args []string) []byte {
-	c.db.mu.Lock()
-	defer c.db.mu.Unlock()
+	c.db.rwMu.Lock()
+	defer c.db.rwMu.Unlock()
 
 	if len(args) < 2 || len(args)%2 == 1 {
 		return simpleError("wrong number of arguments for 'XADD' command")
@@ -105,8 +105,8 @@ func handleXaddId(rawId string, stream []map[string]string) (finishedId string, 
 }
 
 func (c *client) cmdXrange(args []string) []byte {
-	c.db.mu.Lock()
-	defer c.db.mu.Unlock()
+	c.db.rwMu.Lock()
+	defer c.db.rwMu.Unlock()
 
 	if len(args) != 3 {
 		return simpleError("wrong number of arguments for 'XRANGE' command")
@@ -192,8 +192,8 @@ func (c *client) cmdXread(args []string) []byte {
 
 //nolint:gocognit // will refactor later
 func (db *Database) xreadOnce(args []string) []byte {
-	db.mu.Lock()
-	defer db.mu.Unlock()
+	db.rwMu.Lock()
+	defer db.rwMu.Unlock()
 
 	if len(args)%2 != 0 {
 		return simpleError("wrong number of arguments for 'XREAD' command")
@@ -239,8 +239,8 @@ func (db *Database) xreadOnce(args []string) []byte {
 }
 
 func (db *Database) resolveXreadArgs(args []string) ([]string, error) {
-	db.mu.Lock()
-	defer db.mu.Unlock()
+	db.rwMu.Lock()
+	defer db.rwMu.Unlock()
 
 	if len(args)%2 != 0 {
 		return nil, errors.New("wrong number of arguments for 'XREAD' command")
@@ -305,8 +305,8 @@ func compareIds(id1, id2 string) (int, error) {
 }
 
 func (db *Database) addWaiter(waiter chan string, args []string) {
-	db.mu.Lock()
-	defer db.mu.Unlock()
+	db.rwMu.Lock()
+	defer db.rwMu.Unlock()
 
 	keys := args[:len(args)/2]
 

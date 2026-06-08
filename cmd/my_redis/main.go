@@ -64,9 +64,19 @@ func main() {
 }
 
 func parseArgs(args []string) (database.DBConfig, error) {
+	// get absolute path of current dir
+	curDir, err := os.Getwd()
+	if err != nil {
+		return database.DBConfig{}, fmt.Errorf("error getting current directory: %w", err)
+	}
 	dbConfig := database.DBConfig{
-		Port: "6379",
-		Role: "master",
+		Port:           "6379",
+		Role:           "master",
+		Dir:            curDir,
+		Appendonly:     "no",
+		Appenddirname:  "appendonlydir",
+		Appendfilename: "appendonly.aof",
+		Appendfsync:    "everysec",
 	}
 
 	for i := 0; i+1 < len(args); i += 2 {
@@ -84,6 +94,16 @@ func parseArgs(args []string) (database.DBConfig, error) {
 			dbConfig.Dir = args[i+1]
 		case "--dbfilename":
 			dbConfig.DBFilename = args[i+1]
+		case "--appendonly":
+			dbConfig.Appendonly = args[i+1]
+		case "--appenddirname":
+			dbConfig.Appenddirname = args[i+1]
+		case "--appendfilename":
+			dbConfig.Appendfilename = args[i+1]
+		case "--appendfsync":
+			dbConfig.Appendfsync = args[i+1]
+		default:
+			return database.DBConfig{}, fmt.Errorf("unknown argument: %s", args[i])
 		}
 	}
 	return dbConfig, nil
