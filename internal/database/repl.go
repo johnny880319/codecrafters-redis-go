@@ -50,6 +50,7 @@ type Database struct {
 	replicas     []*client
 	aofFile      *os.File
 	aofMu        sync.Mutex
+	subscribers  map[string][]*client
 }
 
 type client struct {
@@ -71,6 +72,7 @@ func NewDatabase(config DBConfig) (*Database, error) {
 		masterReplid: "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb",
 		waiters:      make(map[string][]chan string),
 		data:         make(map[string]dbEntry),
+		subscribers:  make(map[string][]*client),
 	}
 	if err := db.readRDBFile(config); err != nil {
 		return nil, fmt.Errorf("error initializing database: %w", err)
@@ -214,6 +216,8 @@ func (c *client) executeCommand(command []string) []byte {
 		return c.cmdPsync(args)
 	case "WAIT":
 		return c.cmdWait(args)
+	case "SUBSCRIBE":
+		return c.cmdSubscribe(args)
 	default:
 		return []byte("-ERR unknown command\r\n")
 	}
