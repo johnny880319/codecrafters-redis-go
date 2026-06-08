@@ -10,6 +10,12 @@ func (c *client) cmdPing(args []string) []byte {
 	if len(args) != 0 {
 		return simpleError("wrong number of arguments for 'PING' command")
 	}
+	if len(c.subscribedChannels) > 0 {
+		return respArray([][]byte{
+			bulkString("pong", true),
+			bulkString("", true),
+		})
+	}
 	return simpleString("PONG")
 }
 
