@@ -64,6 +64,69 @@ func (c *client) cmdZrank(args []string) []byte {
 		return bulkString("", false)
 	}
 
+	content_slice := sortedSetToRespArray(content)
+
+	for i, item := range content_slice {
+		if item.member == member {
+			return respInteger(i)
+		}
+	}
+
+	return bulkString("", false)
+}
+
+func (c *client) cmdZrange(args []string) []byte {
+	c.db.rwMu.Lock()
+	defer c.db.rwMu.Unlock()
+
+	if len(args) != 3 {
+		return simpleError("wrong number of arguments for 'ZRANGE' command")
+	}
+	key := args[0]
+	startStr := args[1]
+	stopStr := args[2]
+
+	start, err := strconv.Atoi(startStr)
+	if err != nil {
+		return simpleError("ERR value is not an integer or out of range")
+	}
+	stop, err := strconv.Atoi(stopStr)
+	if err != nil {
+		return simpleError("ERR value is not an integer or out of range")
+	}
+
+	content, _, exists, err := c.db.getSortedSetEntry(key)
+	if err != nil {
+		return simpleError(err.Error())
+	}
+	if !exists {
+		return respArray([][]byte{})
+	}
+
+	content_slice := sortedSetToRespArray(content)
+
+	length := len(content_slice)
+	if start < 0 {
+		start = length + start
+	}
+	if stop < 0 {
+		stop = length + stop
+	}
+
+	start = max(start, 0)
+	stop = min(stop, length-1)
+
+	bytesValues := make([][]byte, 0)
+	for i := start; i <= stop; i++ {
+		bytesValues = append(bytesValues, bulkString(content_slice[i].member, true))
+	}
+	return respArray(bytesValues)
+}
+
+func sortedSetToRespArray(content map[string]float64) []struct {
+	member string
+	score  float64
+} {
 	content_slice := make([]struct {
 		member string
 		score  float64
@@ -84,12 +147,5 @@ func (c *client) cmdZrank(args []string) []byte {
 		}
 		return content_slice[i].score < content_slice[j].score
 	})
-
-	for i, item := range content_slice {
-		if item.member == member {
-			return respInteger(i)
-		}
-	}
-
-	return bulkString("", false)
+	return content_slice
 }
