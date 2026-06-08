@@ -86,17 +86,17 @@ func NewDatabase(config DBConfig) (*Database, error) {
 
 // RunConnection handles a single client connection, reading commands and writing responses.
 func (db *Database) RunConnection(conn net.Conn) (err error) {
-	defer func() {
-		closeErr := conn.Close()
-		err = errors.Join(err, closeErr)
-	}()
-
 	client := &client{
 		db:                 db,
 		conn:               conn,
 		watched:            make(map[string]string),
 		subscribedChannels: make(map[string]struct{}),
 	}
+
+	defer func() {
+		closeErr := client.finalizeConnection()
+		err = errors.Join(err, closeErr)
+	}()
 
 	reader := bufio.NewReader(conn)
 	for {
@@ -129,6 +129,20 @@ func (db *Database) RunConnection(conn net.Conn) (err error) {
 			}
 		}
 	}
+}
+
+func (c *client) finalizeConnection() error {
+	c.db.rwMu.Lock()
+	for channel := range c.subscribedChannels {
+		delete(c.db.subscribers[channel], c)
+		if len(c.db.subscribers[channel]) == 0 {
+			delete(c.db.subscribers, channel)
+		}
+	}
+	c.db.rwMu.Unlock()
+
+	err := c.conn.Close()
+	return err
 }
 
 func (c *client) propagateToReplicas(command []string, originalCommand []byte) error {

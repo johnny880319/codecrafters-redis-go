@@ -50,25 +50,29 @@ func (c *client) cmdPublish(args []string) []byte {
 	}
 	channel := args[0]
 	message := args[1]
+	subs := make([]*client, 0)
 
 	c.db.rwMu.RLock()
 	subscribers, exists := c.db.subscribers[channel]
+	for subscriber := range subscribers {
+		subs = append(subs, subscriber)
+	}
 	c.db.rwMu.RUnlock()
 
 	if !exists {
 		return respInteger(0)
 	}
 
-	for subscriber := range subscribers {
+	for _, sub := range subs {
 		response := respArray([][]byte{
 			bulkString("message", true),
 			bulkString(channel, true),
 			bulkString(message, true),
 		})
-		_, err := subscriber.conn.Write(response)
+		_, err := sub.conn.Write(response)
 		if err != nil {
 			return simpleError("error publishing message")
 		}
 	}
-	return respInteger(len(subscribers))
+	return respInteger(len(subs))
 }
