@@ -169,6 +169,36 @@ func (c *client) cmdZscore(args []string) []byte {
 	return bulkString(strconv.FormatFloat(score, 'f', -1, 64), true)
 }
 
+func (c *client) cmdZrem(args []string) []byte {
+	c.db.rwMu.Lock()
+	defer c.db.rwMu.Unlock()
+
+	if len(args) != 2 {
+		return simpleError("wrong number of arguments for 'ZREM' command")
+	}
+	key := args[0]
+	member := args[1]
+
+	content, entry, exists, err := c.db.getSortedSetEntry(key)
+	if err != nil {
+		return simpleError(err.Error())
+	}
+	if !exists {
+		return respInteger(0)
+	}
+
+	_, memberExists := content[member]
+	if !memberExists {
+		return respInteger(0)
+	}
+
+	delete(content, member)
+	entry.value = content
+	c.db.data[key] = entry
+
+	return respInteger(len(content))
+}
+
 func sortedSetToRespArray(content map[string]float64) []struct {
 	member string
 	score  float64
