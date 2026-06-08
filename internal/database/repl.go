@@ -258,6 +258,8 @@ func (c *client) executeCommand(command []string) []byte {
 		return c.cmdPublish(args)
 	case "ZADD":
 		return c.cmdZadd(args)
+	case "ZRANK":
+		return c.cmdZrank(args)
 	default:
 		return []byte("-ERR unknown command\r\n")
 	}
