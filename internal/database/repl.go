@@ -44,11 +44,12 @@ type dbEntry struct {
 type Database struct {
 	config       DBConfig
 	masterReplid string
-	mu           sync.RWMutex
+	rwMu         sync.RWMutex
 	data         map[string]dbEntry
 	waiters      map[string][]chan string
 	replicas     []*client
 	aofFile      *os.File
+	aofMu        sync.Mutex
 }
 
 type client struct {
@@ -74,7 +75,7 @@ func NewDatabase(config DBConfig) (*Database, error) {
 	if err := db.readRDBFile(config); err != nil {
 		return nil, fmt.Errorf("error initializing database: %w", err)
 	}
-	if err := db.initializeAppendOnlyFile(config); err != nil {
+	if err := db.initAOF(config); err != nil {
 		return nil, fmt.Errorf("error initializing database: %w", err)
 	}
 	return db, nil
@@ -104,7 +105,7 @@ func (db *Database) RunConnection(conn net.Conn) (err error) {
 			continue
 		}
 		if response[0] != '-' {
-			err = client.appendFSync(command, originalCommand)
+			err = client.appendAOF(command, originalCommand)
 			if err != nil {
 				return err
 			}
@@ -122,31 +123,8 @@ func (db *Database) RunConnection(conn net.Conn) (err error) {
 	}
 }
 
-func (c *client) appendFSync(command []string, originalCommand []byte) error {
-	if c.db.config.Appendonly != "yes" {
-		return nil
-	}
-	if !isWriteCommand(command[0]) {
-		return nil
-	}
-	if c.db.aofFile == nil {
-		return fmt.Errorf("appendonly file is not initialized")
-	}
-	_, err := c.db.aofFile.Write(originalCommand)
-	if err != nil {
-		return fmt.Errorf("error writing to appendonly file: %w", err)
-	}
-	if c.db.config.Appendfsync == "always" {
-		err = c.db.aofFile.Sync()
-		if err != nil {
-			return fmt.Errorf("error syncing appendonly file: %w", err)
-		}
-	}
-	return nil
-}
-
 func (c *client) propagateToReplicas(command []string, originalCommand []byte) error {
-	if !isWriteCommand(command[0]) {
+	if !isMutatingCommand(command[0]) {
 		return nil
 	}
 
@@ -160,7 +138,7 @@ func (c *client) propagateToReplicas(command []string, originalCommand []byte) e
 	return nil
 }
 
-func isWriteCommand(cmd string) bool {
+func isMutatingCommand(cmd string) bool {
 	switch strings.ToUpper(cmd) {
 	case "SET", "INCR", "RPUSH", "LPUSH", "LPOP", "XADD":
 		return true

@@ -10,19 +10,24 @@ import (
 	"strings"
 )
 
-func (db *Database) initializeAppendOnlyFile(config DBConfig) (err error) {
+func (db *Database) initAOF(config DBConfig) (err error) {
 	if config.Appendonly != "yes" {
 		return nil
 	}
 
-	appendOnlyPath, manifestPath, err := getAppendOnlyPaths(config)
+	appendOnlyPath, manifestPath, err := resolveAOFPaths(config)
 	if err != nil {
 		return fmt.Errorf("error getting appendonly file paths: %w", err)
 	}
 
-	err = createAOFIfNotExists(config, appendOnlyPath, manifestPath)
+	err = ensureAOFFiles(config, appendOnlyPath, manifestPath)
 	if err != nil {
 		return fmt.Errorf("error creating appendonly file: %w", err)
+	}
+
+	err = db.replayAOF(appendOnlyPath)
+	if err != nil {
+		return fmt.Errorf("error replaying appendonly file: %w", err)
 	}
 
 	//nolint:gosec // This is redis behavior, we can assume the filename is safe
@@ -32,14 +37,10 @@ func (db *Database) initializeAppendOnlyFile(config DBConfig) (err error) {
 	}
 	db.aofFile = aofFile
 
-	err = db.replayAOFFile(appendOnlyPath)
-	if err != nil {
-		return fmt.Errorf("error replaying appendonly file: %w", err)
-	}
 	return nil
 }
 
-func getAppendOnlyPaths(config DBConfig) (string, string, error) {
+func resolveAOFPaths(config DBConfig) (string, string, error) {
 	appendOnlyDir := filepath.Join(config.Dir, config.Appenddirname)
 	if _, err := os.Stat(appendOnlyDir); os.IsNotExist(err) {
 		err = os.MkdirAll(appendOnlyDir, 0o750)
@@ -73,7 +74,7 @@ func getAppendOnlyPaths(config DBConfig) (string, string, error) {
 	return appendOnlyPath, manifestPath, nil
 }
 
-func createAOFIfNotExists(config DBConfig, appendOnlyPath string, manifestPath string) error {
+func ensureAOFFiles(config DBConfig, appendOnlyPath string, manifestPath string) error {
 	if _, err := os.Stat(manifestPath); os.IsNotExist(err) {
 		//nolint:gosec // This is redis behavior, we can assume the filename is safe
 		file, err := os.Create(manifestPath)
@@ -105,7 +106,7 @@ func createAOFIfNotExists(config DBConfig, appendOnlyPath string, manifestPath s
 	return nil
 }
 
-func (db *Database) replayAOFFile(appendOnlyPath string) (err error) {
+func (db *Database) replayAOF(appendOnlyPath string) (err error) {
 	//nolint:gosec // This is redis behavior, we can assume the filename is safe
 	replayFile, err := os.Open(appendOnlyPath)
 	if err != nil {
@@ -131,7 +132,36 @@ func (db *Database) replayAOFFile(appendOnlyPath string) (err error) {
 			continue
 		}
 
-		_ = virtualClient.handleCommand(command)
+		response := virtualClient.handleCommand(command)
+		if len(response) == 0 && response[0] == '-' {
+			return fmt.Errorf("error replaying command %v: %s", command, response)
+		}
+	}
+	return nil
+}
+
+func (c *client) appendAOF(command []string, originalCommand []byte) error {
+	if c.db.config.Appendonly != "yes" {
+		return nil
+	}
+	if !isMutatingCommand(command[0]) {
+		return nil
+	}
+	if c.db.aofFile == nil {
+		return fmt.Errorf("appendonly file is not initialized")
+	}
+
+	c.db.aofMu.Lock()
+	defer c.db.aofMu.Unlock()
+	_, err := c.db.aofFile.Write(originalCommand)
+	if err != nil {
+		return fmt.Errorf("error writing to appendonly file: %w", err)
+	}
+	if c.db.config.Appendfsync == "always" {
+		err = c.db.aofFile.Sync()
+		if err != nil {
+			return fmt.Errorf("error syncing appendonly file: %w", err)
+		}
 	}
 	return nil
 }

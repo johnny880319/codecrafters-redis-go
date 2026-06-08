@@ -46,8 +46,8 @@ func (c *client) cmdReplconf(args []string) []byte {
 }
 
 func (c *client) cmdPsync(_ []string) []byte {
-	c.db.mu.Lock()
-	defer c.db.mu.Unlock()
+	c.db.rwMu.Lock()
+	defer c.db.rwMu.Unlock()
 	c.db.replicas = append(c.db.replicas, c)
 
 	response := simpleString(fmt.Sprintf("FULLRESYNC %v 0", c.db.masterReplid))

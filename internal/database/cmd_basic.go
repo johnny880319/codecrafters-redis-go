@@ -21,8 +21,8 @@ func (c *client) cmdEcho(args []string) []byte {
 }
 
 func (c *client) cmdSet(args []string) []byte {
-	c.db.mu.Lock()
-	defer c.db.mu.Unlock()
+	c.db.rwMu.Lock()
+	defer c.db.rwMu.Unlock()
 
 	if len(args) != 2 && len(args) != 4 {
 		return simpleError("wrong number of arguments for 'SET' command")
@@ -58,8 +58,8 @@ func (c *client) cmdSet(args []string) []byte {
 }
 
 func (c *client) cmdGet(args []string) []byte {
-	c.db.mu.Lock()
-	defer c.db.mu.Unlock()
+	c.db.rwMu.Lock()
+	defer c.db.rwMu.Unlock()
 
 	if len(args) != 1 {
 		return simpleError("wrong number of arguments for 'GET' command")
@@ -75,8 +75,8 @@ func (c *client) cmdGet(args []string) []byte {
 }
 
 func (c *client) cmdType(args []string) []byte {
-	c.db.mu.Lock()
-	defer c.db.mu.Unlock()
+	c.db.rwMu.Lock()
+	defer c.db.rwMu.Unlock()
 
 	if len(args) != 1 {
 		return simpleError("wrong number of arguments for 'TYPE' command")
@@ -100,8 +100,8 @@ func (c *client) cmdType(args []string) []byte {
 }
 
 func (c *client) cmdIncr(args []string) []byte {
-	c.db.mu.Lock()
-	defer c.db.mu.Unlock()
+	c.db.rwMu.Lock()
+	defer c.db.rwMu.Unlock()
 
 	if len(args) != 1 {
 		return simpleError("wrong number of arguments for 'INCR' command")
@@ -156,8 +156,8 @@ func (c *client) cmdConfig(args []string) []byte {
 }
 
 func (c *client) cmdKeys(args []string) []byte {
-	c.db.mu.Lock()
-	defer c.db.mu.Unlock()
+	c.db.rwMu.Lock()
+	defer c.db.rwMu.Unlock()
 
 	if len(args) != 1 || args[0] != "*" {
 		return simpleError("wrong number of arguments for 'KEYS' command or unsupported pattern")
