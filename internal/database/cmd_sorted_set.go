@@ -27,16 +27,20 @@ func (c *client) cmdZadd(args []string) []byte {
 	}
 	if !exists {
 		entry = dbEntry{
-			value:     []sortedSetValue{},
+			value:     make(map[string]float64),
 			vType:     SortedSetType,
 			expiresAt: time.Time{},
 		}
 	}
 
-	content = append(content, sortedSetValue{score, member})
+	returnVal := 1
+	if _, memberExists := content[member]; memberExists {
+		returnVal = 0
+	}
+
+	content[member] = score
 	entry.value = content
 	c.db.data[key] = entry
-	newLen := len(content)
 
-	return respInteger(newLen)
+	return respInteger(returnVal)
 }

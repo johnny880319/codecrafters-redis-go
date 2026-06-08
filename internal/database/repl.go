@@ -35,11 +35,6 @@ const (
 	SortedSetType
 )
 
-type sortedSetValue struct {
-	score  float64
-	member string
-}
-
 type dbEntry struct {
 	value     any
 	vType     ValueType
