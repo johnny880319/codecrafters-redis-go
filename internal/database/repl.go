@@ -264,6 +264,8 @@ func (c *client) executeCommand(command []string) []byte {
 		return c.cmdZrange(args)
 	case "ZCARD":
 		return c.cmdZcard(args)
+	case "ZSCORE":
+		return c.cmdZscore(args)
 	default:
 		return []byte("-ERR unknown command\r\n")
 	}
