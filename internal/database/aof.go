@@ -133,7 +133,7 @@ func (db *Database) replayAOF(appendOnlyPath string) (err error) {
 		}
 
 		response := virtualClient.handleCommand(command)
-		if len(response) == 0 && response[0] == '-' {
+		if len(response) != 0 && response[0] == '-' {
 			return fmt.Errorf("error replaying command %v: %s", command, response)
 		}
 	}
