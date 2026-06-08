@@ -123,6 +123,26 @@ func (c *client) cmdZrange(args []string) []byte {
 	return respArray(bytesValues)
 }
 
+func (c *client) cmdZcard(args []string) []byte {
+	c.db.rwMu.Lock()
+	defer c.db.rwMu.Unlock()
+
+	if len(args) != 1 {
+		return simpleError("wrong number of arguments for 'ZCARD' command")
+	}
+	key := args[0]
+
+	content, _, exists, err := c.db.getSortedSetEntry(key)
+	if err != nil {
+		return simpleError(err.Error())
+	}
+	if !exists {
+		return respInteger(0)
+	}
+
+	return respInteger(len(content))
+}
+
 func sortedSetToRespArray(content map[string]float64) []struct {
 	member string
 	score  float64
