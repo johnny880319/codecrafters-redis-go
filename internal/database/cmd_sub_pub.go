@@ -8,18 +8,15 @@ func (c *client) cmdSubscribe(args []string) []byte {
 
 	c.db.rwMu.Lock()
 	if _, exists := c.db.subscribers[channel]; !exists {
-		c.db.subscribers[channel] = []*client{}
+		c.db.subscribers[channel] = make(map[*client]struct{})
 	}
-	c.db.subscribers[channel] = append(c.db.subscribers[channel], c)
+	c.db.subscribers[channel][c] = struct{}{}
+	c.subscribedChannels[channel] = struct{}{}
 
-	subscribeCount := 0
-	for _, subs := range c.db.subscribers {
-		subscribeCount += len(subs)
-	}
 	c.db.rwMu.Unlock()
 	return respArray([][]byte{
 		bulkString("subscribe", true),
 		bulkString(channel, true),
-		respInteger(subscribeCount),
+		respInteger(len(c.subscribedChannels)),
 	})
 }

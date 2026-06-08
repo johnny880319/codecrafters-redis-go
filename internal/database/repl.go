@@ -50,7 +50,7 @@ type Database struct {
 	replicas     []*client
 	aofFile      *os.File
 	aofMu        sync.Mutex
-	subscribers  map[string][]*client
+	subscribers  map[string]map[*client]struct{}
 }
 
 type client struct {
@@ -61,8 +61,9 @@ type client struct {
 	replicaOffset int
 	isMulti       bool
 	// Tracks string snapshots for WATCH; version tracking would detect modify-and-restore cases.
-	watched  map[string]string
-	cmdQueue [][]string
+	watched            map[string]string
+	cmdQueue           [][]string
+	subscribedChannels map[string]struct{}
 }
 
 // NewDatabase initializes and returns a new Database instance.
@@ -72,7 +73,7 @@ func NewDatabase(config DBConfig) (*Database, error) {
 		masterReplid: "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb",
 		waiters:      make(map[string][]chan string),
 		data:         make(map[string]dbEntry),
-		subscribers:  make(map[string][]*client),
+		subscribers:  make(map[string]map[*client]struct{}),
 	}
 	if err := db.readRDBFile(config); err != nil {
 		return nil, fmt.Errorf("error initializing database: %w", err)
@@ -90,7 +91,12 @@ func (db *Database) RunConnection(conn net.Conn) (err error) {
 		err = errors.Join(err, closeErr)
 	}()
 
-	client := &client{db: db, conn: conn, watched: make(map[string]string)}
+	client := &client{
+		db:                 db,
+		conn:               conn,
+		watched:            make(map[string]string),
+		subscribedChannels: make(map[string]struct{}),
+	}
 
 	reader := bufio.NewReader(conn)
 	for {
