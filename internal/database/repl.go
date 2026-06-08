@@ -155,8 +155,21 @@ func isMutatingCommand(cmd string) bool {
 	}
 }
 
+func isSubscribingCommand(cmd string) bool {
+	switch strings.ToUpper(cmd) {
+	case "SUBSCRIBE", "UNSUBSCRIBE", "PSUBSCRIBE", "PUNSUBSCRIBE", "PING", "QUIT":
+		return true
+	default:
+		return false
+	}
+}
+
 func (c *client) handleCommand(command []string) []byte {
 	cmd, args := command[0], command[1:]
+	if len(c.subscribedChannels) > 0 && !isSubscribingCommand(cmd) {
+		return simpleError(executeInSubscribeModeError(cmd))
+	}
+
 	switch strings.ToUpper(cmd) {
 	case "MULTI":
 		return c.cmdMulti(args)
