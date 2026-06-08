@@ -50,6 +50,7 @@ type Database struct {
 	replicas     []*client
 	aofFile      *os.File
 	aofMu        sync.Mutex
+	subscribers  map[string]map[*client]struct{}
 }
 
 type client struct {
@@ -60,8 +61,9 @@ type client struct {
 	replicaOffset int
 	isMulti       bool
 	// Tracks string snapshots for WATCH; version tracking would detect modify-and-restore cases.
-	watched  map[string]string
-	cmdQueue [][]string
+	watched            map[string]string
+	cmdQueue           [][]string
+	subscribedChannels map[string]struct{}
 }
 
 // NewDatabase initializes and returns a new Database instance.
@@ -71,6 +73,7 @@ func NewDatabase(config DBConfig) (*Database, error) {
 		masterReplid: "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb",
 		waiters:      make(map[string][]chan string),
 		data:         make(map[string]dbEntry),
+		subscribers:  make(map[string]map[*client]struct{}),
 	}
 	if err := db.readRDBFile(config); err != nil {
 		return nil, fmt.Errorf("error initializing database: %w", err)
@@ -83,12 +86,17 @@ func NewDatabase(config DBConfig) (*Database, error) {
 
 // RunConnection handles a single client connection, reading commands and writing responses.
 func (db *Database) RunConnection(conn net.Conn) (err error) {
+	client := &client{
+		db:                 db,
+		conn:               conn,
+		watched:            make(map[string]string),
+		subscribedChannels: make(map[string]struct{}),
+	}
+
 	defer func() {
-		closeErr := conn.Close()
+		closeErr := client.finalizeConnection()
 		err = errors.Join(err, closeErr)
 	}()
-
-	client := &client{db: db, conn: conn, watched: make(map[string]string)}
 
 	reader := bufio.NewReader(conn)
 	for {
@@ -123,6 +131,20 @@ func (db *Database) RunConnection(conn net.Conn) (err error) {
 	}
 }
 
+func (c *client) finalizeConnection() error {
+	c.db.rwMu.Lock()
+	for channel := range c.subscribedChannels {
+		delete(c.db.subscribers[channel], c)
+		if len(c.db.subscribers[channel]) == 0 {
+			delete(c.db.subscribers, channel)
+		}
+	}
+	c.db.rwMu.Unlock()
+
+	err := c.conn.Close()
+	return err
+}
+
 func (c *client) propagateToReplicas(command []string, originalCommand []byte) error {
 	if !isMutatingCommand(command[0]) {
 		return nil
@@ -147,8 +169,21 @@ func isMutatingCommand(cmd string) bool {
 	}
 }
 
+func isSubscribingCommand(cmd string) bool {
+	switch strings.ToUpper(cmd) {
+	case "SUBSCRIBE", "UNSUBSCRIBE", "PSUBSCRIBE", "PUNSUBSCRIBE", "PING", "QUIT":
+		return true
+	default:
+		return false
+	}
+}
+
 func (c *client) handleCommand(command []string) []byte {
 	cmd, args := command[0], command[1:]
+	if len(c.subscribedChannels) > 0 && !isSubscribingCommand(cmd) {
+		return simpleError(executeInSubscribeModeError(cmd))
+	}
+
 	switch strings.ToUpper(cmd) {
 	case "MULTI":
 		return c.cmdMulti(args)
@@ -214,6 +249,12 @@ func (c *client) executeCommand(command []string) []byte {
 		return c.cmdPsync(args)
 	case "WAIT":
 		return c.cmdWait(args)
+	case "SUBSCRIBE":
+		return c.cmdSubscribe(args)
+	case "UNSUBSCRIBE":
+		return c.cmdUnsubscribe(args)
+	case "PUBLISH":
+		return c.cmdPublish(args)
 	default:
 		return []byte("-ERR unknown command\r\n")
 	}
