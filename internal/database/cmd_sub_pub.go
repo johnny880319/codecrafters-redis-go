@@ -20,3 +20,32 @@ func (c *client) cmdSubscribe(args []string) []byte {
 		respInteger(len(c.subscribedChannels)),
 	})
 }
+
+func (c *client) cmdPublish(args []string) []byte {
+	if len(args) != 2 {
+		return simpleError("wrong number of arguments for 'PUBLISH' command")
+	}
+	channel := args[0]
+	message := args[1]
+
+	c.db.rwMu.RLock()
+	subscribers, exists := c.db.subscribers[channel]
+	c.db.rwMu.RUnlock()
+
+	if !exists {
+		return respInteger(0)
+	}
+
+	for subscriber := range subscribers {
+		response := respArray([][]byte{
+			bulkString("message", true),
+			bulkString(channel, true),
+			bulkString(message, true),
+		})
+		_, err := subscriber.conn.Write(response)
+		if err != nil {
+			return simpleError("error publishing message")
+		}
+	}
+	return respInteger(len(subscribers))
+}
