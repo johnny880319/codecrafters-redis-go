@@ -32,7 +32,13 @@ const (
 	StringType ValueType = iota
 	ListType
 	StreamType
+	SortedSetType
 )
+
+type sortedSetValue struct {
+	score  float64
+	member string
+}
 
 type dbEntry struct {
 	value     any
@@ -255,6 +261,8 @@ func (c *client) executeCommand(command []string) []byte {
 		return c.cmdUnsubscribe(args)
 	case "PUBLISH":
 		return c.cmdPublish(args)
+	case "ZADD":
+		return c.cmdZadd(args)
 	default:
 		return []byte("-ERR unknown command\r\n")
 	}
