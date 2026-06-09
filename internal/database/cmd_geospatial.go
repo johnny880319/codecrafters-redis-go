@@ -14,6 +14,9 @@ const (
 )
 
 func (c *client) cmdGeoadd(args []string) []byte {
+	c.db.rwMu.Lock()
+	defer c.db.rwMu.Unlock()
+
 	if len(args) != 4 {
 		return simpleError("wrong number of arguments for 'GEOADD' command")
 	}
@@ -57,6 +60,9 @@ func (c *client) cmdGeoadd(args []string) []byte {
 }
 
 func (c *client) cmdGeopos(args []string) []byte {
+	c.db.rwMu.Lock()
+	defer c.db.rwMu.Unlock()
+
 	if len(args) < 2 {
 		return simpleError("wrong number of arguments for 'GEOPOS' command")
 	}
@@ -90,6 +96,9 @@ func (c *client) cmdGeopos(args []string) []byte {
 }
 
 func (c *client) cmdGeodist(args []string) []byte {
+	c.db.rwMu.Lock()
+	defer c.db.rwMu.Unlock()
+
 	if len(args) != 3 {
 		return simpleError("wrong number of arguments for 'GEODIST' command")
 	}
@@ -116,6 +125,9 @@ func (c *client) cmdGeodist(args []string) []byte {
 }
 
 func (c *client) cmdGeosearch(args []string) []byte {
+	c.db.rwMu.Lock()
+	defer c.db.rwMu.Unlock()
+
 	if len(args) != 7 {
 		return simpleError("wrong number of arguments for 'GEOSEARCH' command")
 	}
