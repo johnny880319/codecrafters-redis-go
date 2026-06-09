@@ -43,15 +43,16 @@ type dbEntry struct {
 
 // Database represents an in-memory key-value store with command handling capabilities.
 type Database struct {
-	config       DBConfig
-	masterReplid string
-	rwMu         sync.RWMutex
-	data         map[string]dbEntry
-	waiters      map[string][]chan string
-	replicas     []*client
-	aofFile      *os.File
-	aofMu        sync.Mutex
-	subscribers  map[string]map[*client]struct{}
+	config         DBConfig
+	masterReplid   string
+	rwMu           sync.RWMutex
+	data           map[string]dbEntry
+	waiters        map[string][]chan string
+	replicas       []*client
+	aofFile        *os.File
+	aofMu          sync.Mutex
+	subscribers    map[string]map[*client]struct{}
+	userProperties map[string]map[string][]string
 }
 
 type client struct {
@@ -65,16 +66,18 @@ type client struct {
 	watched            map[string]string
 	cmdQueue           [][]string
 	subscribedChannels map[string]struct{}
+	currentUser        string
 }
 
 // NewDatabase initializes and returns a new Database instance.
 func NewDatabase(config DBConfig) (*Database, error) {
 	db := &Database{
-		config:       config,
-		masterReplid: "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb",
-		waiters:      make(map[string][]chan string),
-		data:         make(map[string]dbEntry),
-		subscribers:  make(map[string]map[*client]struct{}),
+		config:         config,
+		masterReplid:   "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb",
+		waiters:        make(map[string][]chan string),
+		data:           make(map[string]dbEntry),
+		subscribers:    make(map[string]map[*client]struct{}),
+		userProperties: make(map[string]map[string][]string),
 	}
 	if err := db.readRDBFile(config); err != nil {
 		return nil, fmt.Errorf("error initializing database: %w", err)
@@ -82,6 +85,9 @@ func NewDatabase(config DBConfig) (*Database, error) {
 	if err := db.initAOF(config); err != nil {
 		return nil, fmt.Errorf("error initializing database: %w", err)
 	}
+	db.userProperties["default"] = make(map[string][]string)
+	db.userProperties["default"]["flags"] = []string{"nopass"}
+	db.userProperties["default"]["passwords"] = []string{}
 	return db, nil
 }
 
@@ -92,6 +98,7 @@ func (db *Database) RunConnection(conn net.Conn) (err error) {
 		conn:               conn,
 		watched:            make(map[string]string),
 		subscribedChannels: make(map[string]struct{}),
+		currentUser:        "default",
 	}
 
 	defer func() {
