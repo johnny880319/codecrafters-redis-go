@@ -100,8 +100,8 @@ func decodeGeohash(geohash float64) (float64, float64) {
 	normLon := compactInteger(int64(geohash) >> 1)
 	normLat := compactInteger(int64(geohash))
 
-	longitude := float64(normLon)*2*longitudeBound/normalizeRange - longitudeBound
-	latitude := float64(normLat)*2*latitudeBound/normalizeRange - latitudeBound
+	longitude := float64(2*normLon+1)*longitudeBound/normalizeRange - longitudeBound
+	latitude := float64(2*normLat+1)*latitudeBound/normalizeRange - latitudeBound
 
 	return longitude, latitude
 }
