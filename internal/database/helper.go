@@ -59,3 +59,17 @@ func (db *Database) getStreamEntry(key string) ([]map[string]string, dbEntry, bo
 	}
 	return nil, dbEntry{}, false, fmt.Errorf("wrong type of value for key '%s'", key)
 }
+
+func (db *Database) getSortedSetEntry(key string) (map[string]float64, dbEntry, bool, error) {
+	entry, exists := db.getEntry(key)
+	if !exists {
+		return make(map[string]float64), dbEntry{}, false, nil
+	}
+	if entry.vType != SortedSetType {
+		return make(map[string]float64), dbEntry{}, false, fmt.Errorf("wrong type of value for key '%s'", key)
+	}
+	if content, ok := entry.value.(map[string]float64); ok {
+		return content, entry, true, nil
+	}
+	return make(map[string]float64), dbEntry{}, false, fmt.Errorf("wrong type of value for key '%s'", key)
+}

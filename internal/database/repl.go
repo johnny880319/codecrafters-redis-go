@@ -32,6 +32,7 @@ const (
 	StringType ValueType = iota
 	ListType
 	StreamType
+	SortedSetType
 )
 
 type dbEntry struct {
@@ -162,7 +163,7 @@ func (c *client) propagateToReplicas(command []string, originalCommand []byte) e
 
 func isMutatingCommand(cmd string) bool {
 	switch strings.ToUpper(cmd) {
-	case "SET", "INCR", "RPUSH", "LPUSH", "LPOP", "XADD":
+	case "SET", "INCR", "RPUSH", "LPUSH", "LPOP", "XADD", "ZADD", "ZREM":
 		return true
 	default:
 		return false
@@ -255,6 +256,18 @@ func (c *client) executeCommand(command []string) []byte {
 		return c.cmdUnsubscribe(args)
 	case "PUBLISH":
 		return c.cmdPublish(args)
+	case "ZADD":
+		return c.cmdZadd(args)
+	case "ZRANK":
+		return c.cmdZrank(args)
+	case "ZRANGE":
+		return c.cmdZrange(args)
+	case "ZCARD":
+		return c.cmdZcard(args)
+	case "ZSCORE":
+		return c.cmdZscore(args)
+	case "ZREM":
+		return c.cmdZrem(args)
 	default:
 		return []byte("-ERR unknown command\r\n")
 	}

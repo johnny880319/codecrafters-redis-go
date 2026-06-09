@@ -100,6 +100,8 @@ func (c *client) cmdType(args []string) []byte {
 		return simpleString("list")
 	case StreamType:
 		return simpleString("stream")
+	case SortedSetType:
+		return simpleString("zset")
 	default:
 		return simpleString("unknown")
 	}
