@@ -196,7 +196,7 @@ func (c *client) cmdZrem(args []string) []byte {
 	entry.value = content
 	c.db.data[key] = entry
 
-	return respInteger(len(content))
+	return respInteger(1)
 }
 
 func sortedSetToRespArray(content map[string]float64) []struct {

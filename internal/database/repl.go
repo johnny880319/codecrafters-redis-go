@@ -163,7 +163,7 @@ func (c *client) propagateToReplicas(command []string, originalCommand []byte) e
 
 func isMutatingCommand(cmd string) bool {
 	switch strings.ToUpper(cmd) {
-	case "SET", "INCR", "RPUSH", "LPUSH", "LPOP", "XADD":
+	case "SET", "INCR", "RPUSH", "LPUSH", "LPOP", "XADD", "ZADD", "ZREM":
 		return true
 	default:
 		return false

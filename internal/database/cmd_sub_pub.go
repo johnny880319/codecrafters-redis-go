@@ -53,15 +53,10 @@ func (c *client) cmdPublish(args []string) []byte {
 	subs := make([]*client, 0)
 
 	c.db.rwMu.RLock()
-	subscribers, exists := c.db.subscribers[channel]
-	for subscriber := range subscribers {
+	for subscriber := range c.db.subscribers[channel] {
 		subs = append(subs, subscriber)
 	}
 	c.db.rwMu.RUnlock()
-
-	if !exists {
-		return respInteger(0)
-	}
 
 	for _, sub := range subs {
 		response := respArray([][]byte{
