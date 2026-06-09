@@ -41,6 +41,11 @@ type dbEntry struct {
 	expiresAt time.Time
 }
 
+type userProperties struct {
+	flags     []string
+	passwords []string
+}
+
 // Database represents an in-memory key-value store with command handling capabilities.
 type Database struct {
 	config         DBConfig
@@ -52,7 +57,7 @@ type Database struct {
 	aofFile        *os.File
 	aofMu          sync.Mutex
 	subscribers    map[string]map[*client]struct{}
-	userProperties map[string]map[string][]string
+	userProperties map[string]userProperties
 }
 
 type client struct {
@@ -67,6 +72,7 @@ type client struct {
 	cmdQueue           [][]string
 	subscribedChannels map[string]struct{}
 	currentUser        string
+	hasAuthenticated   bool
 }
 
 // NewDatabase initializes and returns a new Database instance.
@@ -77,7 +83,7 @@ func NewDatabase(config DBConfig) (*Database, error) {
 		waiters:        make(map[string][]chan string),
 		data:           make(map[string]dbEntry),
 		subscribers:    make(map[string]map[*client]struct{}),
-		userProperties: make(map[string]map[string][]string),
+		userProperties: make(map[string]userProperties),
 	}
 	if err := db.readRDBFile(config); err != nil {
 		return nil, fmt.Errorf("error initializing database: %w", err)
@@ -85,9 +91,10 @@ func NewDatabase(config DBConfig) (*Database, error) {
 	if err := db.initAOF(config); err != nil {
 		return nil, fmt.Errorf("error initializing database: %w", err)
 	}
-	db.userProperties["default"] = make(map[string][]string)
-	db.userProperties["default"]["flags"] = []string{"nopass"}
-	db.userProperties["default"]["passwords"] = []string{}
+	db.userProperties["default"] = userProperties{
+		flags:     []string{"nopass"},
+		passwords: []string{},
+	}
 	return db, nil
 }
 
@@ -99,7 +106,9 @@ func (db *Database) RunConnection(conn net.Conn) (err error) {
 		watched:            make(map[string]string),
 		subscribedChannels: make(map[string]struct{}),
 		currentUser:        "default",
+		hasAuthenticated:   false,
 	}
+	client.checkAuthentication()
 
 	defer func() {
 		closeErr := client.finalizeConnection()
@@ -135,6 +144,15 @@ func (db *Database) RunConnection(conn net.Conn) (err error) {
 			if err != nil {
 				return err
 			}
+		}
+	}
+}
+
+func (c *client) checkAuthentication() {
+	for _, property := range c.db.userProperties[c.currentUser].flags {
+		if property == "nopass" {
+			c.hasAuthenticated = true
+			break
 		}
 	}
 }
@@ -188,6 +206,10 @@ func isSubscribingCommand(cmd string) bool {
 
 func (c *client) handleCommand(command []string) []byte {
 	cmd, args := command[0], command[1:]
+	if !c.hasAuthenticated && strings.ToUpper(cmd) != "AUTH" {
+		return simpleError(noAuth)
+	}
+
 	if len(c.subscribedChannels) > 0 && !isSubscribingCommand(cmd) {
 		return simpleError(executeInSubscribeModeError(cmd))
 	}
@@ -285,6 +307,8 @@ func (c *client) executeCommand(command []string) []byte {
 		return c.cmdGeosearch(args)
 	case "ACL":
 		return c.cmdAcl(args)
+	case "AUTH":
+		return c.cmdAuth(args)
 	default:
 		return []byte("-ERR unknown command\r\n")
 	}

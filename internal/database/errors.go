@@ -3,17 +3,19 @@ package database
 import "strings"
 
 const (
-	xaddIDNotGreaterThanZero = "The ID specified in XADD must be greater than 0-0"
-	xaddIDNotGreaterThanLast = "The ID specified in XADD is equal or smaller than the target stream top item"
-	incrValueNotInteger      = "value is not an integer or out of range"
-	execWithoutMulti         = "EXEC without MULTI"
-	discardWithoutMulti      = "DISCARD without MULTI"
-	watchInsideMulti         = "WATCH inside MULTI is not allowed"
-	invalidLongitudeLatitude = "invalid longitude,latitude pair"
+	xaddIDNotGreaterThanZero = "ERR The ID specified in XADD must be greater than 0-0"
+	xaddIDNotGreaterThanLast = "ERR The ID specified in XADD is equal or smaller than the target stream top item"
+	incrValueNotInteger      = "ERR value is not an integer or out of range"
+	execWithoutMulti         = "ERR EXEC without MULTI"
+	discardWithoutMulti      = "ERR DISCARD without MULTI"
+	watchInsideMulti         = "ERR WATCH inside MULTI is not allowed"
+	invalidLongitudeLatitude = "ERR invalid longitude,latitude pair"
+	wrongPass                = "WRONGPASS invalid username-password pair or user is disabled."
+	noAuth                   = "ERR NOAUTH Authentication required."
 )
 
 func executeInSubscribeModeError(command string) string {
-	return "Can't execute '" +
+	return "ERR Can't execute '" +
 		strings.ToLower(command) +
 		"': only (P|S)SUBSCRIBE / (P|S)UNSUBSCRIBE / PING / QUIT / RESET are allowed in this context"
 }

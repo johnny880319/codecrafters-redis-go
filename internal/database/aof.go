@@ -118,7 +118,7 @@ func (db *Database) replayAOF(appendOnlyPath string) (err error) {
 	}()
 
 	reader := bufio.NewReader(replayFile)
-	virtualClient := &client{db: db, conn: nil, watched: make(map[string]string)}
+	virtualClient := &client{db: db, conn: nil, watched: make(map[string]string), hasAuthenticated: true}
 	for {
 		command, _, err := readCommand(reader)
 		if errors.Is(err, io.EOF) {

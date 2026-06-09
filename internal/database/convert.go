@@ -107,5 +107,5 @@ func respArray(arr [][]byte) []byte {
 }
 
 func simpleError(msg string) []byte {
-	return []byte("-ERR " + msg + "\r\n")
+	return []byte("-" + msg + "\r\n")
 }
