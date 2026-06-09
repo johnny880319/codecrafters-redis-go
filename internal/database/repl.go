@@ -272,6 +272,8 @@ func (c *client) executeCommand(command []string) []byte {
 		return c.cmdGeoadd(args)
 	case "GEOPOS":
 		return c.cmdGeopos(args)
+	case "GEODIST":
+		return c.cmdGeodist(args)
 	default:
 		return []byte("-ERR unknown command\r\n")
 	}

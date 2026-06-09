@@ -1,14 +1,16 @@
 package database
 
 import (
+	"math"
 	"strconv"
 	"time"
 )
 
 const (
-	longitudeBound = 180.0
-	latitudeBound  = 85.05112878
-	normalizeRange = 1 << 26
+	longitudeBound      = 180.0
+	latitudeBound       = 85.05112878
+	normalizeRange      = 1 << 26
+	earthRadiusInMeters = 6372797.560856
 )
 
 func (c *client) cmdGeoadd(args []string) []byte {
@@ -87,6 +89,32 @@ func (c *client) cmdGeopos(args []string) []byte {
 	return respArray(response)
 }
 
+func (c *client) cmdGeodist(args []string) []byte {
+	if len(args) != 3 {
+		return simpleError("wrong number of arguments for 'GEODIST' command")
+	}
+	key := args[0]
+	member1 := args[1]
+	member2 := args[2]
+
+	content, _, exists, err := c.db.getSortedSetEntry(key)
+	if err != nil {
+		return simpleError(err.Error())
+	}
+	if !exists {
+		return bulkString("", false)
+	}
+
+	hash1, member1Exists := content[member1]
+	hash2, member2Exists := content[member2]
+	if !member1Exists || !member2Exists {
+		return bulkString("", false)
+	}
+
+	distance := computeDistance(hash1, hash2)
+	return bulkString(strconv.FormatFloat(distance, 'f', -1, 64), true)
+}
+
 func encodeGeohash(longitude, latitude float64) float64 {
 	// Normalization and Truncation
 	normLon := int64(normalizeRange * (longitude + longitudeBound) / (2 * longitudeBound))
@@ -130,4 +158,17 @@ func compactInteger(v int64) int64 {
 	v = (v | (v >> 16)) & 0x00000000FFFFFFFF
 
 	return v
+}
+
+func computeDistance(hash1, hash2 float64) float64 {
+	lon1, lat1 := decodeGeohash(hash1)
+	lon2, lat2 := decodeGeohash(hash2)
+
+	lon1r, lat1r := lon1*math.Pi/180, lat1*math.Pi/180
+	lon2r, lat2r := lon2*math.Pi/180, lat2*math.Pi/180
+
+	v := math.Sin((lon2r - lon1r) / 2)
+	u := math.Sin((lat2r - lat1r) / 2)
+
+	return 2 * earthRadiusInMeters * math.Asin(math.Sqrt(u*u+math.Cos(lat1r)*math.Cos(lat2r)*v*v))
 }
