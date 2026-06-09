@@ -163,7 +163,7 @@ func (c *client) propagateToReplicas(command []string, originalCommand []byte) e
 
 func isMutatingCommand(cmd string) bool {
 	switch strings.ToUpper(cmd) {
-	case "SET", "INCR", "RPUSH", "LPUSH", "LPOP", "XADD", "ZADD", "ZREM":
+	case "SET", "INCR", "RPUSH", "LPUSH", "LPOP", "XADD", "ZADD", "ZREM", "GEOADD":
 		return true
 	default:
 		return false
@@ -268,6 +268,14 @@ func (c *client) executeCommand(command []string) []byte {
 		return c.cmdZscore(args)
 	case "ZREM":
 		return c.cmdZrem(args)
+	case "GEOADD":
+		return c.cmdGeoadd(args)
+	case "GEOPOS":
+		return c.cmdGeopos(args)
+	case "GEODIST":
+		return c.cmdGeodist(args)
+	case "GEOSEARCH":
+		return c.cmdGeosearch(args)
 	default:
 		return []byte("-ERR unknown command\r\n")
 	}
