@@ -9,6 +9,7 @@ const (
 	execWithoutMulti         = "EXEC without MULTI"
 	discardWithoutMulti      = "DISCARD without MULTI"
 	watchInsideMulti         = "WATCH inside MULTI is not allowed"
+	invalidLongitudeLatitude = "invalid longitude,latitude pair"
 )
 
 func executeInSubscribeModeError(command string) string {
