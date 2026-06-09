@@ -276,6 +276,8 @@ func (c *client) executeCommand(command []string) []byte {
 		return c.cmdGeodist(args)
 	case "GEOSEARCH":
 		return c.cmdGeosearch(args)
+	case "ACL":
+		return c.cmdAcl(args)
 	default:
 		return []byte("-ERR unknown command\r\n")
 	}
