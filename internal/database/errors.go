@@ -11,7 +11,7 @@ const (
 	watchInsideMulti         = "ERR WATCH inside MULTI is not allowed"
 	invalidLongitudeLatitude = "ERR invalid longitude,latitude pair"
 	wrongPass                = "WRONGPASS invalid username-password pair or user is disabled."
-	noAuth                   = "ERR NOAUTH Authentication required."
+	noAuth                   = "NOAUTH Authentication required."
 )
 
 func executeInSubscribeModeError(command string) string {
