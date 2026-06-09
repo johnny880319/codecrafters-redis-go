@@ -115,6 +115,51 @@ func (c *client) cmdGeodist(args []string) []byte {
 	return bulkString(strconv.FormatFloat(distance, 'f', -1, 64), true)
 }
 
+func (c *client) cmdGeosearch(args []string) []byte {
+	if len(args) != 7 {
+		return simpleError("wrong number of arguments for 'GEOSEARCH' command")
+	}
+
+	if args[1] != "FROMLONLAT" || args[4] != "BYRADIUS" || args[6] != "m" {
+		return simpleError("GEOSEARCH currently only supports the syntax: " +
+			"GEOSEARCH <key> FROMLONLAT <longitude> <latitude> BYRADIUS <radius> m")
+	}
+
+	key := args[0]
+	longitude, err := strconv.ParseFloat(args[2], 64)
+	if err != nil {
+		return simpleError("invalid longitude value")
+	}
+	latitude, err := strconv.ParseFloat(args[3], 64)
+	if err != nil {
+		return simpleError("invalid latitude value")
+	}
+	radius, err := strconv.ParseFloat(args[5], 64)
+	if err != nil {
+		return simpleError("invalid radius value")
+	}
+
+	if longitude < -longitudeBound || longitude > longitudeBound || latitude < -latitudeBound || latitude > latitudeBound {
+		return simpleError(invalidLongitudeLatitude)
+	}
+
+	content, _, _, err := c.db.getSortedSetEntry(key)
+	if err != nil {
+		return simpleError(err.Error())
+	}
+
+	centerHash := encodeGeohash(longitude, latitude)
+	response := make([][]byte, 0)
+	for member, geohash := range content {
+		distance := computeDistance(centerHash, geohash)
+		if distance <= radius {
+			response = append(response, bulkString(member, true))
+		}
+	}
+
+	return respArray(response)
+}
+
 func encodeGeohash(longitude, latitude float64) float64 {
 	// Normalization and Truncation
 	normLon := int64(normalizeRange * (longitude + longitudeBound) / (2 * longitudeBound))
