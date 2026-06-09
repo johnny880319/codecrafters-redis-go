@@ -5,6 +5,12 @@ import (
 	"time"
 )
 
+const (
+	longitudeBound = 180.0
+	latitudeBound  = 85.05112878
+	normalizeRange = 1 << 26
+)
+
 func (c *client) cmdGeoadd(args []string) []byte {
 	if len(args) != 4 {
 		return simpleError("wrong number of arguments for 'GEOADD' command")
@@ -20,7 +26,7 @@ func (c *client) cmdGeoadd(args []string) []byte {
 		return simpleError("invalid latitude value")
 	}
 
-	if longitude < -180 || longitude > 180 || latitude < -85.05112878 || latitude > 85.05112878 {
+	if longitude < -longitudeBound || longitude > longitudeBound || latitude < -latitudeBound || latitude > latitudeBound {
 		return simpleError(invalidLongitudeLatitude)
 	}
 
@@ -41,9 +47,32 @@ func (c *client) cmdGeoadd(args []string) []byte {
 		returnVal = 0
 	}
 
-	content[member] = 0
+	content[member] = encodeGeohash(longitude, latitude)
 	entry.value = content
 	c.db.data[key] = entry
 
 	return respInteger(returnVal)
+}
+
+func encodeGeohash(longitude, latitude float64) float64 {
+	// Normalization and Truncation
+	normLon := int64(normalizeRange * (longitude + longitudeBound) / (2 * longitudeBound))
+	normLat := int64(normalizeRange * (latitude + latitudeBound) / (2 * latitudeBound))
+
+	// Interleaving
+	return float64(spread_integer(normLon)<<1 | (spread_integer(normLat)))
+}
+
+func spread_integer(v int64) int64 {
+	// Ensure only lower 32 bits are non-zero.
+	v &= 0xFFFFFFFF
+
+	// Bitwise operations to spread 32 bits into 64 bits with zeros in-between
+	v = (v | (v << 16)) & 0x0000FFFF0000FFFF
+	v = (v | (v << 8)) & 0x00FF00FF00FF00FF
+	v = (v | (v << 4)) & 0x0F0F0F0F0F0F0F0F
+	v = (v | (v << 2)) & 0x3333333333333333
+	v = (v | (v << 1)) & 0x5555555555555555
+
+	return v
 }
