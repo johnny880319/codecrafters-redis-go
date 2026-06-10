@@ -149,6 +149,9 @@ func (db *Database) RunConnection(conn net.Conn) (err error) {
 }
 
 func (c *client) checkAuthentication() {
+	c.db.rwMu.Lock()
+	defer c.db.rwMu.Unlock()
+
 	for _, property := range c.db.userProperties[c.currentUser].flags {
 		if property == "nopass" {
 			c.hasAuthenticated = true
