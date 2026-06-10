@@ -12,7 +12,7 @@ func (c *client) cmdXadd(args []string) []byte {
 	defer c.db.rwMu.Unlock()
 
 	if len(args) < 2 || len(args)%2 == 1 {
-		return simpleError("wrong number of arguments for 'XADD' command")
+		return simpleError(redisErr, "usage: XADD <key> <id> <field1> <value1> [<field2> <value2> ...]")
 	}
 	key := args[0]
 	id := args[1]
@@ -20,7 +20,7 @@ func (c *client) cmdXadd(args []string) []byte {
 
 	content, entry, exists, err := c.db.getStreamEntry(key)
 	if err != nil {
-		return simpleError(err.Error())
+		return simpleError(redisErr, err.Error())
 	}
 	if !exists {
 		entry = dbEntry{
@@ -32,7 +32,7 @@ func (c *client) cmdXadd(args []string) []byte {
 
 	id, errMsg := handleXaddId(id, content)
 	if errMsg != "" {
-		return simpleError(errMsg)
+		return simpleError(redisErr, errMsg)
 	}
 
 	newEntry := make(map[string]string)
@@ -109,7 +109,7 @@ func (c *client) cmdXrange(args []string) []byte {
 	defer c.db.rwMu.Unlock()
 
 	if len(args) != 3 {
-		return simpleError("wrong number of arguments for 'XRANGE' command")
+		return simpleError(redisErr, "usage: XRANGE <key> <start> <stop>")
 	}
 	key := args[0]
 	start := args[1]
@@ -117,7 +117,7 @@ func (c *client) cmdXrange(args []string) []byte {
 
 	content, _, exists, err := c.db.getStreamEntry(key)
 	if err != nil {
-		return simpleError(err.Error())
+		return simpleError(redisErr, err.Error())
 	}
 	if !exists {
 		return respArray([][]byte{}) // empty stream
@@ -129,7 +129,7 @@ func (c *client) cmdXrange(args []string) []byte {
 		compare1, err1 := compareIds(start, id)
 		compare2, err2 := compareIds(id, stop)
 		if err1 != nil || err2 != nil {
-			return simpleError("invalid ID format for 'XRANGE' command")
+			return simpleError(redisErr, "invalid ID format for 'XRANGE' command")
 		}
 		if compare1 <= 0 && compare2 <= 0 {
 			values := [][]byte{}
@@ -147,20 +147,20 @@ func (c *client) cmdXrange(args []string) []byte {
 
 func (c *client) cmdXread(args []string) []byte {
 	if len(args) < 3 {
-		return simpleError("wrong number of arguments for 'XREAD' command")
+		return simpleError(redisErr, "usage: XREAD [BLOCK <milliseconds>] STREAMS <key1> <key2> ... <id1> <id2> ...")
 	}
 	var err error
 	timeoutMilisec := -1
 	if strings.ToLower(args[0]) == "block" {
 		timeoutMilisec, err = strconv.Atoi(args[1])
 		if err != nil || timeoutMilisec < 0 {
-			return simpleError("invalid BLOCK value for 'XREAD' command")
+			return simpleError(redisErr, "invalid BLOCK value for 'XREAD' command")
 		}
 		args = args[2:]
 	}
 
 	if strings.ToLower(args[0]) != "streams" {
-		return simpleError("invalid syntax for 'XREAD' command")
+		return simpleError(redisErr, "invalid syntax for 'XREAD' command")
 	}
 	args = args[1:]
 
@@ -171,7 +171,7 @@ func (c *client) cmdXread(args []string) []byte {
 
 	args, err = c.db.resolveXreadArgs(args)
 	if err != nil {
-		return simpleError(err.Error())
+		return simpleError(redisErr, err.Error())
 	}
 
 	waiter := make(chan string)
@@ -196,7 +196,7 @@ func (db *Database) xreadOnce(args []string) []byte {
 	defer db.rwMu.Unlock()
 
 	if len(args)%2 != 0 {
-		return simpleError("wrong number of arguments for 'XREAD' command")
+		return simpleError(redisErr, "usage: XREAD [BLOCK <milliseconds>] STREAMS <key1> <key2> ... <id1> <id2> ...")
 	}
 	keys, ids := args[:len(args)/2], args[len(args)/2:]
 
@@ -206,7 +206,7 @@ func (db *Database) xreadOnce(args []string) []byte {
 
 		content, _, exists, err := db.getStreamEntry(key)
 		if err != nil {
-			return simpleError(err.Error())
+			return simpleError(redisErr, err.Error())
 		}
 		if !exists {
 			continue
@@ -216,7 +216,7 @@ func (db *Database) xreadOnce(args []string) []byte {
 			itemId := item["id"]
 			compare, err := compareIds(id, itemId)
 			if err != nil {
-				return simpleError("invalid ID format for 'XREAD' command")
+				return simpleError(redisErr, "invalid ID format for 'XREAD' command")
 			}
 			if compare < 0 {
 				values := [][]byte{}

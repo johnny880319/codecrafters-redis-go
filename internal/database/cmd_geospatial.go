@@ -18,26 +18,26 @@ func (c *client) cmdGeoadd(args []string) []byte {
 	defer c.db.rwMu.Unlock()
 
 	if len(args) != 4 {
-		return simpleError("wrong number of arguments for 'GEOADD' command")
+		return simpleError(redisErr, "usage: GEOADD <key> <longitude> <latitude> <member>")
 	}
 	key := args[0]
 	member := args[3]
 	longitude, err := strconv.ParseFloat(args[1], 64)
 	if err != nil {
-		return simpleError("invalid longitude value")
+		return simpleError(redisErr, "invalid longitude value")
 	}
 	latitude, err := strconv.ParseFloat(args[2], 64)
 	if err != nil {
-		return simpleError("invalid latitude value")
+		return simpleError(redisErr, "invalid latitude value")
 	}
 
 	if longitude < -longitudeBound || longitude > longitudeBound || latitude < -latitudeBound || latitude > latitudeBound {
-		return simpleError(invalidLongitudeLatitude)
+		return simpleError(redisErr, "invalid longitude or latitude value")
 	}
 
 	content, entry, exists, err := c.db.getSortedSetEntry(key)
 	if err != nil {
-		return simpleError(err.Error())
+		return simpleError(redisErr, err.Error())
 	}
 	if !exists {
 		entry = dbEntry{
@@ -64,7 +64,7 @@ func (c *client) cmdGeopos(args []string) []byte {
 	defer c.db.rwMu.Unlock()
 
 	if len(args) < 2 {
-		return simpleError("wrong number of arguments for 'GEOPOS' command")
+		return simpleError(redisErr, "usage: GEOPOS <key> <member> [<member> ...]")
 	}
 	key := args[0]
 	members := args[1:]
@@ -72,7 +72,7 @@ func (c *client) cmdGeopos(args []string) []byte {
 	response := make([][]byte, 0, len(members))
 	content, _, exists, err := c.db.getSortedSetEntry(key)
 	if err != nil {
-		return simpleError(err.Error())
+		return simpleError(redisErr, err.Error())
 	}
 
 	for _, member := range members {
@@ -100,7 +100,7 @@ func (c *client) cmdGeodist(args []string) []byte {
 	defer c.db.rwMu.Unlock()
 
 	if len(args) != 3 {
-		return simpleError("wrong number of arguments for 'GEODIST' command")
+		return simpleError(redisErr, "usage: GEODIST <key> <member1> <member2>")
 	}
 	key := args[0]
 	member1 := args[1]
@@ -108,7 +108,7 @@ func (c *client) cmdGeodist(args []string) []byte {
 
 	content, _, exists, err := c.db.getSortedSetEntry(key)
 	if err != nil {
-		return simpleError(err.Error())
+		return simpleError(redisErr, err.Error())
 	}
 	if !exists {
 		return bulkString("", false)
@@ -129,35 +129,34 @@ func (c *client) cmdGeosearch(args []string) []byte {
 	defer c.db.rwMu.Unlock()
 
 	if len(args) != 7 {
-		return simpleError("wrong number of arguments for 'GEOSEARCH' command")
+		return simpleError(redisErr, "usage: GEOSEARCH <key> FROMLONLAT <longitude> <latitude> BYRADIUS <radius> m")
 	}
 
 	if args[1] != "FROMLONLAT" || args[4] != "BYRADIUS" || args[6] != "m" {
-		return simpleError("GEOSEARCH currently only supports the syntax: " +
-			"GEOSEARCH <key> FROMLONLAT <longitude> <latitude> BYRADIUS <radius> m")
+		return simpleError(redisErr, "usage: GEOSEARCH <key> FROMLONLAT <longitude> <latitude> BYRADIUS <radius> m")
 	}
 
 	key := args[0]
 	longitude, err := strconv.ParseFloat(args[2], 64)
 	if err != nil {
-		return simpleError("invalid longitude value")
+		return simpleError(redisErr, "invalid longitude value")
 	}
 	latitude, err := strconv.ParseFloat(args[3], 64)
 	if err != nil {
-		return simpleError("invalid latitude value")
+		return simpleError(redisErr, "invalid latitude value")
 	}
 	radius, err := strconv.ParseFloat(args[5], 64)
 	if err != nil {
-		return simpleError("invalid radius value")
+		return simpleError(redisErr, "invalid radius value")
 	}
 
 	if longitude < -longitudeBound || longitude > longitudeBound || latitude < -latitudeBound || latitude > latitudeBound {
-		return simpleError(invalidLongitudeLatitude)
+		return simpleError(redisErr, invalidLongitudeLatitude)
 	}
 
 	content, _, _, err := c.db.getSortedSetEntry(key)
 	if err != nil {
-		return simpleError(err.Error())
+		return simpleError(redisErr, err.Error())
 	}
 
 	centerHash := encodeGeohash(longitude, latitude)

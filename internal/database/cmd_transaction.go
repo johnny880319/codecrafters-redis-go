@@ -2,10 +2,10 @@ package database
 
 func (c *client) cmdMulti(args []string) []byte {
 	if len(args) != 0 {
-		return simpleError("wrong number of arguments for 'MULTI' command")
+		return simpleError(redisErr, "usage: MULTI")
 	}
 	if c.isMulti {
-		return simpleError("MULTI calls can not be nested")
+		return simpleError(redisErr, "MULTI calls can not be nested")
 	}
 	c.isMulti = true
 	return simpleString("OK")
@@ -13,10 +13,10 @@ func (c *client) cmdMulti(args []string) []byte {
 
 func (c *client) cmdExec(args []string) []byte {
 	if len(args) != 0 {
-		return simpleError("wrong number of arguments for 'EXEC' command")
+		return simpleError(redisErr, "usage: EXEC")
 	}
 	if !c.isMulti {
-		return simpleError(execWithoutMulti)
+		return simpleError(redisErr, execWithoutMulti)
 	}
 
 	for key, watchedValue := range c.watched {
@@ -24,7 +24,7 @@ func (c *client) cmdExec(args []string) []byte {
 		currentValue, _, _, err := c.db.getStringEntry(key)
 		c.db.rwMu.Unlock()
 		if err != nil {
-			return simpleError(err.Error())
+			return simpleError(redisErr, err.Error())
 		}
 		if currentValue != watchedValue {
 			c.isMulti = false
@@ -46,10 +46,10 @@ func (c *client) cmdExec(args []string) []byte {
 
 func (c *client) cmdDiscard(args []string) []byte {
 	if len(args) != 0 {
-		return simpleError("wrong number of arguments for 'DISCARD' command")
+		return simpleError(redisErr, "usage: DISCARD")
 	}
 	if !c.isMulti {
-		return simpleError(discardWithoutMulti)
+		return simpleError(redisErr, discardWithoutMulti)
 	}
 	c.isMulti = false
 	c.cmdQueue = nil
@@ -59,7 +59,7 @@ func (c *client) cmdDiscard(args []string) []byte {
 
 func (c *client) cmdWatch(args []string) []byte {
 	if c.isMulti {
-		return simpleError(watchInsideMulti)
+		return simpleError(redisErr, watchInsideMulti)
 	}
 
 	for _, key := range args {
@@ -67,7 +67,7 @@ func (c *client) cmdWatch(args []string) []byte {
 		content, _, _, err := c.db.getStringEntry(key)
 		c.db.rwMu.Unlock()
 		if err != nil {
-			return simpleError(err.Error())
+			return simpleError(redisErr, err.Error())
 		}
 		c.watched[key] = content
 	}
@@ -76,7 +76,7 @@ func (c *client) cmdWatch(args []string) []byte {
 
 func (c *client) cmdUnwatch(args []string) []byte {
 	if len(args) != 0 {
-		return simpleError("wrong number of arguments for 'UNWATCH' command")
+		return simpleError(redisErr, "usage: UNWATCH")
 	}
 	c.watched = make(map[string]string)
 	return simpleString("OK")

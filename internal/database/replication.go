@@ -48,31 +48,9 @@ func (db *Database) RunReplication(masterAddr string) (err error) {
 		return err
 	}
 
-	client := &client{db: db, conn: conn, watched: make(map[string]string)}
+	client := &client{db: db, conn: conn, watched: make(map[string]string), hasAuthenticated: true}
 
-	for {
-		command, originalCommand, err := readCommand(reader)
-		if err != nil {
-			return fmt.Errorf("error reading command: %w", err)
-		}
-		if len(command) == 0 {
-			continue
-		}
-
-		_ = client.handleCommand(command)
-
-		if strings.ToUpper(command[0]) == "REPLCONF" {
-			_, err = conn.Write(respArray([][]byte{
-				bulkString("REPLCONF", true),
-				bulkString("ACK", true),
-				bulkString(strconv.Itoa(client.offset), true),
-			}))
-			if err != nil {
-				return fmt.Errorf("error writing response: %w", err)
-			}
-		}
-		client.offset += len(originalCommand)
-	}
+	return client.replicationLoop(reader)
 }
 
 func readRDB(reader *bufio.Reader) error {
@@ -95,4 +73,37 @@ func readRDB(reader *bufio.Reader) error {
 	}
 
 	return nil
+}
+
+func (c *client) replicationLoop(reader *bufio.Reader) error {
+	for {
+		command, originalCommand, err := readCommand(reader)
+		if err != nil {
+			return fmt.Errorf("error reading command: %w", err)
+		}
+		if len(command) == 0 {
+			continue
+		}
+
+		if len(command) == 3 &&
+			strings.ToUpper(command[0]) == "REPLCONF" &&
+			strings.ToUpper(command[1]) == "GETACK" {
+			_, err = c.conn.Write(respArray([][]byte{
+				bulkString("REPLCONF", true),
+				bulkString("ACK", true),
+				bulkString(strconv.Itoa(c.offset), true),
+			}))
+			if err != nil {
+				return fmt.Errorf("error writing response: %w", err)
+			}
+			c.offset += len(originalCommand)
+			continue
+		}
+
+		response := c.handleCommand(command)
+		if len(response) != 0 && response[0] == '-' {
+			return fmt.Errorf("error executing command %v: %s", command, response)
+		}
+		c.offset += len(originalCommand)
+	}
 }

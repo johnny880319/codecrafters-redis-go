@@ -8,7 +8,7 @@ import (
 
 func (c *client) cmdPing(args []string) []byte {
 	if len(args) != 0 {
-		return simpleError("wrong number of arguments for 'PING' command")
+		return simpleError(redisErr, "usage: PING")
 	}
 	if len(c.subscribedChannels) > 0 {
 		return respArray([][]byte{
@@ -21,7 +21,7 @@ func (c *client) cmdPing(args []string) []byte {
 
 func (c *client) cmdEcho(args []string) []byte {
 	if len(args) != 1 {
-		return simpleError("wrong number of arguments for 'ECHO' command")
+		return simpleError(redisErr, "usage: ECHO <message>")
 	}
 	return bulkString(args[0], true)
 }
@@ -31,7 +31,7 @@ func (c *client) cmdSet(args []string) []byte {
 	defer c.db.rwMu.Unlock()
 
 	if len(args) != 2 && len(args) != 4 {
-		return simpleError("wrong number of arguments for 'SET' command")
+		return simpleError(redisErr, "usage: SET <key> <value> [<expiration option> <expiration value>]")
 	}
 	key := args[0]
 	value := args[1]
@@ -43,7 +43,7 @@ func (c *client) cmdSet(args []string) []byte {
 
 		expireInt, err := strconv.Atoi(expireValue)
 		if err != nil {
-			return simpleError("invalid expiration value")
+			return simpleError(redisErr, "invalid expiration value")
 		}
 
 		switch option {
@@ -52,7 +52,7 @@ func (c *client) cmdSet(args []string) []byte {
 		case "ex":
 			expiresAt = time.Now().Add(time.Duration(expireInt) * time.Second)
 		default:
-			return simpleError("invalid expiration option")
+			return simpleError(redisErr, "invalid expiration option")
 		}
 	}
 	c.db.data[key] = dbEntry{
@@ -68,11 +68,11 @@ func (c *client) cmdGet(args []string) []byte {
 	defer c.db.rwMu.Unlock()
 
 	if len(args) != 1 {
-		return simpleError("wrong number of arguments for 'GET' command")
+		return simpleError(redisErr, "usage: GET <key>")
 	}
 	content, _, exists, err := c.db.getStringEntry(args[0])
 	if err != nil {
-		return simpleError(err.Error())
+		return simpleError(redisErr, err.Error())
 	}
 	if !exists {
 		return bulkString("", false) // nil response
@@ -85,7 +85,7 @@ func (c *client) cmdType(args []string) []byte {
 	defer c.db.rwMu.Unlock()
 
 	if len(args) != 1 {
-		return simpleError("wrong number of arguments for 'TYPE' command")
+		return simpleError(redisErr, "usage: TYPE <key>")
 	}
 
 	entry, exists := c.db.getEntry(args[0])
@@ -112,12 +112,12 @@ func (c *client) cmdIncr(args []string) []byte {
 	defer c.db.rwMu.Unlock()
 
 	if len(args) != 1 {
-		return simpleError("wrong number of arguments for 'INCR' command")
+		return simpleError(redisErr, "usage: INCR <key>")
 	}
 	key := args[0]
 	content, entry, exist, err := c.db.getStringEntry(key)
 	if err != nil {
-		return simpleError(err.Error())
+		return simpleError(redisErr, err.Error())
 	}
 	if !exist {
 		content = "0"
@@ -128,7 +128,7 @@ func (c *client) cmdIncr(args []string) []byte {
 	}
 	contentInt, err := strconv.Atoi(content)
 	if err != nil {
-		return simpleError(incrValueNotInteger)
+		return simpleError(redisErr, incrValueNotInteger)
 	}
 	contentInt++
 	entry.value = strconv.Itoa(contentInt)
@@ -138,7 +138,7 @@ func (c *client) cmdIncr(args []string) []byte {
 
 func (c *client) cmdConfig(args []string) []byte {
 	if len(args) != 2 {
-		return simpleError("wrong number of arguments for 'CONFIG' command")
+		return simpleError(redisErr, "usage: CONFIG GET <parameter>")
 	}
 	switch strings.ToUpper(args[0]) {
 	case "GET":
@@ -156,10 +156,10 @@ func (c *client) cmdConfig(args []string) []byte {
 		case "appendfsync":
 			return respArray([][]byte{bulkString("appendfsync", true), bulkString(c.db.config.Appendfsync, true)})
 		default:
-			return simpleError("unsupported CONFIG subcommand")
+			return simpleError(redisErr, "unsupported CONFIG subcommand")
 		}
 	default:
-		return simpleError("unsupported CONFIG subcommand")
+		return simpleError(redisErr, "unsupported CONFIG subcommand")
 	}
 }
 
@@ -168,7 +168,7 @@ func (c *client) cmdKeys(args []string) []byte {
 	defer c.db.rwMu.Unlock()
 
 	if len(args) != 1 || args[0] != "*" {
-		return simpleError("wrong number of arguments for 'KEYS' command or unsupported pattern")
+		return simpleError(redisErr, "usage: KEYS *")
 	}
 	keys := make([][]byte, 0, len(c.db.data))
 	for key := range c.db.data {
