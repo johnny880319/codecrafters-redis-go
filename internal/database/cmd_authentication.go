@@ -7,6 +7,9 @@ import (
 )
 
 func (c *client) cmdAcl(args []string) []byte {
+	c.db.rwMu.Lock()
+	defer c.db.rwMu.Unlock()
+
 	if len(args) < 1 {
 		return simpleError("usage: ACL <subcommand> [arguments]")
 	}
@@ -43,7 +46,7 @@ func (c *client) cmdAcl(args []string) []byte {
 		if len(args) != 3 {
 			return simpleError("usage: ACL SETUSER <username> ><password>")
 		}
-		if args[2][0] != '>' {
+		if args[2] == "" || args[2][0] != '>' {
 			return simpleError("password must start with '>'")
 		}
 
@@ -63,6 +66,9 @@ func (c *client) cmdAcl(args []string) []byte {
 }
 
 func (c *client) cmdAuth(args []string) []byte {
+	c.db.rwMu.Lock()
+	defer c.db.rwMu.Unlock()
+
 	if len(args) != 2 {
 		return simpleError("usage: AUTH <username> <password>")
 	}
@@ -79,6 +85,7 @@ func (c *client) cmdAuth(args []string) []byte {
 	for _, property := range c.db.userProperties[username].flags {
 		if property == "nopass" {
 			c.hasAuthenticated = true
+			c.currentUser = username
 			return simpleString("OK")
 		}
 	}
@@ -86,6 +93,7 @@ func (c *client) cmdAuth(args []string) []byte {
 	for _, storedHash := range c.db.userProperties[username].passwords {
 		if storedHash == passwordHash {
 			c.hasAuthenticated = true
+			c.currentUser = username
 			return simpleString("OK")
 		}
 	}
