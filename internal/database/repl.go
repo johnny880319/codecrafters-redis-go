@@ -98,16 +98,20 @@ func NewDatabase(config DBConfig) (*Database, error) {
 	return db, nil
 }
 
-// RunConnection handles a single client connection, reading commands and writing responses.
-func (db *Database) RunConnection(conn net.Conn) (err error) {
-	client := &client{
+func newClient(db *Database, conn net.Conn) *client {
+	return &client{
 		db:                 db,
 		conn:               conn,
 		watched:            make(map[string]string),
 		subscribedChannels: make(map[string]struct{}),
 		currentUser:        "default",
-		hasAuthenticated:   false,
+		hasAuthenticated:   true,
 	}
+}
+
+// RunConnection handles a single client connection, reading commands and writing responses.
+func (db *Database) RunConnection(conn net.Conn) (err error) {
+	client := newClient(db, conn)
 	client.checkAuthentication()
 
 	defer func() {
@@ -152,12 +156,15 @@ func (c *client) checkAuthentication() {
 	c.db.rwMu.Lock()
 	defer c.db.rwMu.Unlock()
 
+	nopass := false
 	for _, property := range c.db.userProperties[c.currentUser].flags {
 		if property == "nopass" {
-			c.hasAuthenticated = true
+			nopass = true
 			break
 		}
 	}
+
+	c.hasAuthenticated = nopass
 }
 
 func (c *client) finalizeConnection() error {
@@ -179,7 +186,12 @@ func (c *client) propagateToReplicas(command []string, originalCommand []byte) e
 		return nil
 	}
 
-	for _, replicaClient := range c.db.replicas {
+	c.db.rwMu.RLock()
+	replicas := make([]*client, len(c.db.replicas))
+	copy(replicas, c.db.replicas)
+	c.db.rwMu.RUnlock()
+
+	for _, replicaClient := range replicas {
 		_, err := replicaClient.conn.Write(originalCommand)
 		if err != nil {
 			return fmt.Errorf("error propagating to replica: %w", err)

@@ -48,8 +48,7 @@ func (db *Database) RunReplication(masterAddr string) (err error) {
 		return err
 	}
 
-	client := &client{db: db, conn: conn, watched: make(map[string]string), hasAuthenticated: true}
-
+	client := newClient(db, conn)
 	return client.replicationLoop(reader)
 }
 
