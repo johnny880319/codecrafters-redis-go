@@ -11,7 +11,7 @@ func (c *client) cmdAcl(args []string) []byte {
 	defer c.db.rwMu.Unlock()
 
 	if len(args) < 1 {
-		return simpleError("usage: ACL <subcommand> [arguments]")
+		return simpleError(redisErr, "usage: ACL <subcommand> [arguments]")
 	}
 
 	switch strings.ToUpper(args[0]) {
@@ -19,11 +19,11 @@ func (c *client) cmdAcl(args []string) []byte {
 		return bulkString(c.currentUser, true)
 	case "GETUSER":
 		if len(args) != 2 {
-			return simpleError("usage: ACL GETUSER <username>")
+			return simpleError(redisErr, "usage: ACL GETUSER <username>")
 		}
 		user := args[1]
 		if _, exists := c.db.userProperties[user]; !exists {
-			return simpleError("no such user")
+			return simpleError(redisErr, "no such user")
 		}
 
 		responseFlags := make([][]byte, len(c.db.userProperties[user].flags))
@@ -44,10 +44,10 @@ func (c *client) cmdAcl(args []string) []byte {
 		return respArray(response)
 	case "SETUSER":
 		if len(args) != 3 {
-			return simpleError("usage: ACL SETUSER <username> ><password>")
+			return simpleError(redisErr, "usage: ACL SETUSER <username> ><password>")
 		}
 		if args[2] == "" || args[2][0] != '>' {
-			return simpleError("password must start with '>'")
+			return simpleError(redisErr, "password must start with '>'")
 		}
 
 		user := args[1]
@@ -61,7 +61,7 @@ func (c *client) cmdAcl(args []string) []byte {
 		}
 		return simpleString("OK")
 	default:
-		return simpleError("unknown ACL subcommand")
+		return simpleError(redisErr, "unknown ACL subcommand")
 	}
 }
 
@@ -70,7 +70,7 @@ func (c *client) cmdAuth(args []string) []byte {
 	defer c.db.rwMu.Unlock()
 
 	if len(args) != 2 {
-		return simpleError("usage: AUTH <username> <password>")
+		return simpleError(redisErr, "usage: AUTH <username> <password>")
 	}
 
 	username := args[0]
@@ -79,7 +79,7 @@ func (c *client) cmdAuth(args []string) []byte {
 	passwordHash := hex.EncodeToString(passwordHash32[:])
 
 	if _, exists := c.db.userProperties[username]; !exists {
-		return simpleError(wrongPass)
+		return simpleError(redisWrongPass, wrongPass)
 	}
 
 	for _, property := range c.db.userProperties[username].flags {
@@ -98,5 +98,5 @@ func (c *client) cmdAuth(args []string) []byte {
 		}
 	}
 
-	return simpleError(wrongPass)
+	return simpleError(redisWrongPass, wrongPass)
 }

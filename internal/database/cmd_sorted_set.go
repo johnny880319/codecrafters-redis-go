@@ -11,7 +11,7 @@ func (c *client) cmdZadd(args []string) []byte {
 	defer c.db.rwMu.Unlock()
 
 	if len(args) != 3 {
-		return simpleError("wrong number of arguments for 'ZADD' command")
+		return simpleError(redisErr, "usage: ZADD <key> <score> <member>")
 	}
 	key := args[0]
 	scoreStr := args[1]
@@ -19,12 +19,12 @@ func (c *client) cmdZadd(args []string) []byte {
 
 	score, err := strconv.ParseFloat(scoreStr, 64)
 	if err != nil {
-		return simpleError("ERR value is not a valid float")
+		return simpleError(redisErr, "value is not a valid float")
 	}
 
 	content, entry, exists, err := c.db.getSortedSetEntry(key)
 	if err != nil {
-		return simpleError(err.Error())
+		return simpleError(redisErr, err.Error())
 	}
 	if !exists {
 		entry = dbEntry{
@@ -51,14 +51,14 @@ func (c *client) cmdZrank(args []string) []byte {
 	defer c.db.rwMu.Unlock()
 
 	if len(args) != 2 {
-		return simpleError("wrong number of arguments for 'ZRANK' command")
+		return simpleError(redisErr, "usage: ZRANK <key> <member>")
 	}
 	key := args[0]
 	member := args[1]
 
 	content, _, exists, err := c.db.getSortedSetEntry(key)
 	if err != nil {
-		return simpleError(err.Error())
+		return simpleError(redisErr, err.Error())
 	}
 	if !exists {
 		return bulkString("", false)
@@ -80,7 +80,7 @@ func (c *client) cmdZrange(args []string) []byte {
 	defer c.db.rwMu.Unlock()
 
 	if len(args) != 3 {
-		return simpleError("wrong number of arguments for 'ZRANGE' command")
+		return simpleError(redisErr, "usage: ZRANGE <key> <start> <stop>")
 	}
 	key := args[0]
 	startStr := args[1]
@@ -88,16 +88,16 @@ func (c *client) cmdZrange(args []string) []byte {
 
 	start, err := strconv.Atoi(startStr)
 	if err != nil {
-		return simpleError("ERR value is not an integer or out of range")
+		return simpleError(redisErr, "value is not an integer or out of range")
 	}
 	stop, err := strconv.Atoi(stopStr)
 	if err != nil {
-		return simpleError("ERR value is not an integer or out of range")
+		return simpleError(redisErr, "value is not an integer or out of range")
 	}
 
 	content, _, exists, err := c.db.getSortedSetEntry(key)
 	if err != nil {
-		return simpleError(err.Error())
+		return simpleError(redisErr, err.Error())
 	}
 	if !exists {
 		return respArray([][]byte{})
@@ -128,13 +128,13 @@ func (c *client) cmdZcard(args []string) []byte {
 	defer c.db.rwMu.Unlock()
 
 	if len(args) != 1 {
-		return simpleError("wrong number of arguments for 'ZCARD' command")
+		return simpleError(redisErr, "usage: ZCARD <key>")
 	}
 	key := args[0]
 
 	content, _, exists, err := c.db.getSortedSetEntry(key)
 	if err != nil {
-		return simpleError(err.Error())
+		return simpleError(redisErr, err.Error())
 	}
 	if !exists {
 		return respInteger(0)
@@ -148,14 +148,14 @@ func (c *client) cmdZscore(args []string) []byte {
 	defer c.db.rwMu.Unlock()
 
 	if len(args) != 2 {
-		return simpleError("wrong number of arguments for 'ZSCORE' command")
+		return simpleError(redisErr, "usage: ZSCORE <key> <member>")
 	}
 	key := args[0]
 	member := args[1]
 
 	content, _, exists, err := c.db.getSortedSetEntry(key)
 	if err != nil {
-		return simpleError(err.Error())
+		return simpleError(redisErr, err.Error())
 	}
 	if !exists {
 		return bulkString("", false)
@@ -174,14 +174,14 @@ func (c *client) cmdZrem(args []string) []byte {
 	defer c.db.rwMu.Unlock()
 
 	if len(args) != 2 {
-		return simpleError("wrong number of arguments for 'ZREM' command")
+		return simpleError(redisErr, "usage: ZREM <key> <member>")
 	}
 	key := args[0]
 	member := args[1]
 
 	content, entry, exists, err := c.db.getSortedSetEntry(key)
 	if err != nil {
-		return simpleError(err.Error())
+		return simpleError(redisErr, err.Error())
 	}
 	if !exists {
 		return respInteger(0)

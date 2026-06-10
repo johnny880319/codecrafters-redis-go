@@ -11,14 +11,14 @@ func (c *client) cmdRpush(args []string) []byte {
 	defer c.db.rwMu.Unlock()
 
 	if len(args) < 2 {
-		return simpleError("wrong number of arguments for 'RPUSH' command")
+		return simpleError(redisErr, "usage: RPUSH <key> <value> [value ...]")
 	}
 	key := args[0]
 	values := args[1:]
 
 	content, entry, exists, err := c.db.getListEntry(key)
 	if err != nil {
-		return simpleError(err.Error())
+		return simpleError(redisErr, err.Error())
 	}
 	if !exists {
 		entry = dbEntry{
@@ -56,14 +56,14 @@ func (c *client) cmdLpush(args []string) []byte {
 	defer c.db.rwMu.Unlock()
 
 	if len(args) < 2 {
-		return simpleError("wrong number of arguments for 'LPUSH' command")
+		return simpleError(redisErr, "usage: LPUSH <key> <value> [value ...]")
 	}
 	key := args[0]
 	values := args[1:]
 
 	content, entry, exists, err := c.db.getListEntry(key)
 	if err != nil {
-		return simpleError(err.Error())
+		return simpleError(redisErr, err.Error())
 	}
 	if !exists {
 		entry = dbEntry{
@@ -104,13 +104,13 @@ func (c *client) cmdLpop(args []string) []byte {
 	defer c.db.rwMu.Unlock()
 
 	if len(args) < 1 || len(args) > 2 {
-		return simpleError("wrong number of arguments for 'LPOP' command")
+		return simpleError(redisErr, "usage: LPOP <key> [count]")
 	}
 	key := args[0]
 
 	content, entry, exists, err := c.db.getListEntry(key)
 	if err != nil {
-		return simpleError(err.Error())
+		return simpleError(redisErr, err.Error())
 	}
 	if !exists || len(content) == 0 {
 		return bulkString("", false) // nil response
@@ -125,7 +125,7 @@ func (c *client) cmdLpop(args []string) []byte {
 
 	count, err := strconv.Atoi(args[1])
 	if err != nil || count < 0 {
-		return simpleError("invalid count value")
+		return simpleError(redisErr, "invalid count value")
 	}
 	count = min(count, len(content))
 
@@ -142,12 +142,12 @@ func (c *client) cmdLpop(args []string) []byte {
 
 func (c *client) cmdBLpop(args []string) []byte {
 	if len(args) != 2 {
-		return simpleError("wrong number of arguments for 'BLPOP' command")
+		return simpleError(redisErr, "usage: BLPOP <key> <timeout>")
 	}
 	key := args[0]
 	timeoutSec, err := strconv.ParseFloat(args[1], 64)
 	if err != nil || timeoutSec < 0 {
-		return simpleError("invalid timeout value")
+		return simpleError(redisErr, "invalid timeout value")
 	}
 
 	var waiter chan string
@@ -159,7 +159,7 @@ func (c *client) cmdBLpop(args []string) []byte {
 
 		content, entry, exists, err := c.db.getListEntry(key)
 		if err != nil {
-			response = simpleError(err.Error())
+			response = simpleError(redisErr, err.Error())
 			return
 		}
 		if !exists {
@@ -217,18 +217,18 @@ func (c *client) cmdLrange(args []string) []byte {
 	defer c.db.rwMu.Unlock()
 
 	if len(args) != 3 {
-		return simpleError("wrong number of arguments for 'LRANGE' command")
+		return simpleError(redisErr, "usage: LRANGE <key> <start> <stop>")
 	}
 	key := args[0]
 	start, err1 := strconv.Atoi(args[1])
 	stop, err2 := strconv.Atoi(args[2])
 	if err1 != nil || err2 != nil {
-		return simpleError("invalid start or stop index")
+		return simpleError(redisErr, "invalid start or stop index")
 	}
 
 	content, _, exists, err := c.db.getListEntry(key)
 	if err != nil {
-		return simpleError(err.Error())
+		return simpleError(redisErr, err.Error())
 	}
 	if !exists {
 		return respArray([][]byte{}) // empty list
@@ -257,13 +257,13 @@ func (c *client) cmdLlen(args []string) []byte {
 	c.db.rwMu.Lock()
 	defer c.db.rwMu.Unlock()
 	if len(args) != 1 {
-		return simpleError("wrong number of arguments for 'LLEN' command")
+		return simpleError(redisErr, "usage: LLEN <key>")
 	}
 	key := args[0]
 
 	content, _, exists, err := c.db.getListEntry(key)
 	if err != nil {
-		return simpleError(err.Error())
+		return simpleError(redisErr, err.Error())
 	}
 	if !exists {
 		return respInteger(0) // empty list

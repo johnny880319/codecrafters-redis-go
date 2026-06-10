@@ -9,7 +9,7 @@ import (
 
 func (c *client) cmdInfo(args []string) []byte {
 	if len(args) != 1 {
-		return simpleError("wrong number of arguments for 'INFO' command")
+		return simpleError(redisErr, "usage: INFO replication")
 	}
 	switch args[0] {
 	case "replication":
@@ -20,13 +20,13 @@ func (c *client) cmdInfo(args []string) []byte {
 			true,
 		)
 	default:
-		return simpleError("unsupported INFO section")
+		return simpleError(redisErr, "unsupported INFO section")
 	}
 }
 
 func (c *client) cmdReplconf(args []string) []byte {
 	if len(args) != 2 {
-		return simpleError("invalid response from replica")
+		return simpleError(redisErr, "usage: REPLCONF <option> <value>")
 	}
 
 	if args[0] == "listening-port" || args[0] == "capa" {
@@ -34,12 +34,12 @@ func (c *client) cmdReplconf(args []string) []byte {
 	}
 
 	if args[0] != "ACK" {
-		return simpleError("invalid REPLCONF option")
+		return simpleError(redisErr, "invalid REPLCONF option")
 	}
 
 	replicaOffset, err := strconv.Atoi(args[1])
 	if err != nil {
-		return simpleError("invalid offset value from replica")
+		return simpleError(redisErr, "invalid offset value from replica")
 	}
 	c.replicaOffset = replicaOffset
 	return nil
@@ -54,7 +54,7 @@ func (c *client) cmdPsync(_ []string) []byte {
 
 	emptyRDB, err := emptyRDBPayload()
 	if err != nil {
-		return simpleError("error generating empty RDB payload")
+		return simpleError(redisErr, "failed to generate empty RDB payload: "+err.Error())
 	}
 
 	response = append(response, []byte(fmt.Sprintf("$%d\r\n", len(emptyRDB)))...)
@@ -68,22 +68,22 @@ func emptyRDBPayload() ([]byte, error) {
 
 	emptyRDB, err := base64.StdEncoding.DecodeString(emptyRDBBase64)
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode empty RDB data: %w", err)
+		return nil, fmt.Errorf("ERR failed to decode empty RDB data: %w", err)
 	}
 	return emptyRDB, nil
 }
 
 func (c *client) cmdWait(args []string) []byte {
 	if len(args) != 2 {
-		return simpleError("wrong number of arguments for 'WAIT' command")
+		return simpleError(redisErr, "usage: WAIT <replica count> <timeout>")
 	}
 	count, err := strconv.Atoi(args[0])
 	if err != nil || count < 0 {
-		return simpleError("invalid count value")
+		return simpleError(redisErr, "invalid count value")
 	}
 	timeoutMs, err := strconv.Atoi(args[1])
 	if err != nil || timeoutMs < 0 {
-		return simpleError("invalid timeout value")
+		return simpleError(redisErr, "invalid timeout value")
 	}
 
 	for _, replica := range c.db.replicas {
@@ -92,7 +92,7 @@ func (c *client) cmdWait(args []string) []byte {
 			bulkString("GETACK", true),
 			bulkString("*", true),
 		})); err != nil {
-			return simpleError("error sending REPLCONF GETACK to replica")
+			return simpleError(redisErr, "error sending REPLCONF GETACK to replica: "+err.Error())
 		}
 	}
 

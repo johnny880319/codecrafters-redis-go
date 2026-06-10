@@ -2,7 +2,7 @@ package database
 
 func (c *client) cmdSubscribe(args []string) []byte {
 	if len(args) != 1 {
-		return simpleError("wrong number of arguments for 'SUBSCRIBE' command")
+		return simpleError(redisErr, "usage: SUBSCRIBE <channel>")
 	}
 	channel := args[0]
 
@@ -23,7 +23,7 @@ func (c *client) cmdSubscribe(args []string) []byte {
 
 func (c *client) cmdUnsubscribe(args []string) []byte {
 	if len(args) != 1 {
-		return simpleError("wrong number of arguments for 'UNSUBSCRIBE' command")
+		return simpleError(redisErr, "usage: UNSUBSCRIBE <channel>")
 	}
 	channel := args[0]
 
@@ -46,7 +46,7 @@ func (c *client) cmdUnsubscribe(args []string) []byte {
 
 func (c *client) cmdPublish(args []string) []byte {
 	if len(args) != 2 {
-		return simpleError("wrong number of arguments for 'PUBLISH' command")
+		return simpleError(redisErr, "usage: PUBLISH <channel> <message>")
 	}
 	channel := args[0]
 	message := args[1]
@@ -66,7 +66,7 @@ func (c *client) cmdPublish(args []string) []byte {
 		})
 		_, err := sub.conn.Write(response)
 		if err != nil {
-			return simpleError("error publishing message")
+			return simpleError(redisErr, "error publishing message")
 		}
 	}
 	return respInteger(len(subs))

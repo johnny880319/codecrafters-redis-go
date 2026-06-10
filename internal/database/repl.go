@@ -207,11 +207,11 @@ func isSubscribingCommand(cmd string) bool {
 func (c *client) handleCommand(command []string) []byte {
 	cmd, args := command[0], command[1:]
 	if !c.hasAuthenticated && strings.ToUpper(cmd) != "AUTH" {
-		return simpleError(noAuth)
+		return simpleError(redisNoAuth, noAuth)
 	}
 
 	if len(c.subscribedChannels) > 0 && !isSubscribingCommand(cmd) {
-		return simpleError(executeInSubscribeModeError(cmd))
+		return simpleError(redisErr, executeInSubscribeModeError(cmd))
 	}
 
 	switch strings.ToUpper(cmd) {
