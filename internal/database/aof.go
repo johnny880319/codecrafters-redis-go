@@ -120,7 +120,7 @@ func (db *Database) replayAOF(appendOnlyPath string) (err error) {
 	reader := bufio.NewReader(replayFile)
 	virtualClient := newClient(db, nil)
 	for {
-		command, _, err := readCommand(reader)
+		command, originalCommand, err := readCommand(reader)
 		if errors.Is(err, io.EOF) {
 			break
 		}
@@ -132,19 +132,16 @@ func (db *Database) replayAOF(appendOnlyPath string) (err error) {
 			continue
 		}
 
-		response := virtualClient.handleCommand(command)
-		if len(response) != 0 && response[0] == '-' {
-			return fmt.Errorf("error replaying command %v: %s", command, response)
+		result := virtualClient.handleCommand(commandContext{command, originalCommand})
+		if len(result.response) != 0 && result.response[0] == '-' {
+			return fmt.Errorf("error replaying command %v: %s", command, result.response)
 		}
 	}
 	return nil
 }
 
-func (c *client) appendAOF(command []string, originalCommand []byte) error {
+func (c *client) appendAOF(originalCommands []byte) error {
 	if c.db.config.Appendonly != "yes" {
-		return nil
-	}
-	if !isMutatingCommand(command[0]) {
 		return nil
 	}
 	if c.db.aofFile == nil {
@@ -153,7 +150,7 @@ func (c *client) appendAOF(command []string, originalCommand []byte) error {
 
 	c.db.aofMu.Lock()
 	defer c.db.aofMu.Unlock()
-	_, err := c.db.aofFile.Write(originalCommand)
+	_, err := c.db.aofFile.Write(originalCommands)
 	if err != nil {
 		return fmt.Errorf("error writing to appendonly file: %w", err)
 	}

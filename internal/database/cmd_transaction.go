@@ -35,8 +35,8 @@ func (c *client) cmdExec(args []string) []byte {
 	}
 
 	responses := make([][]byte, len(c.cmdQueue))
-	for i, command := range c.cmdQueue {
-		responses[i] = c.executeCommand(command)
+	for i, ctx := range c.cmdQueue {
+		responses[i] = c.executeCommand(ctx.command)
 	}
 	c.isMulti = false
 	c.cmdQueue = nil

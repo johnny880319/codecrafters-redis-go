@@ -99,9 +99,9 @@ func (c *client) replicationLoop(reader *bufio.Reader) error {
 			continue
 		}
 
-		response := c.handleCommand(command)
-		if len(response) != 0 && response[0] == '-' {
-			return fmt.Errorf("error executing command %v: %s", command, response)
+		result := c.handleCommand(commandContext{command, originalCommand})
+		if len(result.response) != 0 && result.response[0] == '-' {
+			return fmt.Errorf("error executing command %v: %s", command, result.response)
 		}
 		c.offset += len(originalCommand)
 	}
