@@ -1,3 +1,6 @@
+// Entry helpers may delete expired keys while reading, so callers must hold db.rwMu.Lock.
+// Do not call these helpers under RLock unless expiration deletion is moved elsewhere.
+
 package database
 
 import (
@@ -5,6 +8,8 @@ import (
 	"time"
 )
 
+// getEntry returns the entry for key and lazily removes it if expired.
+// Caller must hold db.rwMu.Lock because this may mutate db.data.
 func (db *Database) getEntry(key string) (dbEntry, bool) {
 	val, ok := db.data[key]
 	if !ok {
@@ -18,6 +23,7 @@ func (db *Database) getEntry(key string) (dbEntry, bool) {
 	return val, true
 }
 
+// getStringEntry follows getEntry's locking contract.
 func (db *Database) getStringEntry(key string) (string, dbEntry, bool, error) {
 	entry, exists := db.getEntry(key)
 	if !exists {
@@ -32,6 +38,7 @@ func (db *Database) getStringEntry(key string) (string, dbEntry, bool, error) {
 	return "", dbEntry{}, false, fmt.Errorf("wrong type of value for key '%s'", key)
 }
 
+// getListEntry follows getEntry's locking contract.
 func (db *Database) getListEntry(key string) ([]string, dbEntry, bool, error) {
 	entry, exists := db.getEntry(key)
 	if !exists {
@@ -46,6 +53,7 @@ func (db *Database) getListEntry(key string) ([]string, dbEntry, bool, error) {
 	return nil, dbEntry{}, false, fmt.Errorf("wrong type of value for key '%s'", key)
 }
 
+// getStreamEntry follows getEntry's locking contract.
 func (db *Database) getStreamEntry(key string) ([]map[string]string, dbEntry, bool, error) {
 	entry, exists := db.getEntry(key)
 	if !exists {
@@ -60,6 +68,7 @@ func (db *Database) getStreamEntry(key string) ([]map[string]string, dbEntry, bo
 	return nil, dbEntry{}, false, fmt.Errorf("wrong type of value for key '%s'", key)
 }
 
+// getSortedSetEntry follows getEntry's locking contract.
 func (db *Database) getSortedSetEntry(key string) (map[string]float64, dbEntry, bool, error) {
 	entry, exists := db.getEntry(key)
 	if !exists {
