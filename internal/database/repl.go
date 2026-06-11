@@ -52,6 +52,7 @@ type Database struct {
 	rwMu           sync.RWMutex
 	data           map[string]dbEntry
 	waiters        map[string][]chan string
+	versions       map[string]int
 	replicas       []*client
 	aofFile        *os.File
 	aofMu          sync.Mutex
@@ -62,12 +63,11 @@ type Database struct {
 type client struct {
 	db *Database
 
-	conn          net.Conn
-	offset        int
-	replicaOffset int
-	isMulti       bool
-	// Tracks string snapshots for WATCH; version tracking would detect modify-and-restore cases.
-	watched            map[string]string
+	conn               net.Conn
+	offset             int
+	replicaOffset      int
+	isMulti            bool
+	watchedVersion     map[string]int
 	cmdQueue           []commandContext
 	subscribedChannels map[string]struct{}
 	currentUser        string
@@ -81,6 +81,7 @@ func NewDatabase(config DBConfig) (*Database, error) {
 		masterReplid:   "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb",
 		waiters:        make(map[string][]chan string),
 		data:           make(map[string]dbEntry),
+		versions:       make(map[string]int),
 		subscribers:    make(map[string]map[*client]struct{}),
 		userProperties: make(map[string]userProperties),
 	}
@@ -101,7 +102,7 @@ func newClient(db *Database, conn net.Conn) *client {
 	return &client{
 		db:                 db,
 		conn:               conn,
-		watched:            make(map[string]string),
+		watchedVersion:     make(map[string]int),
 		subscribedChannels: make(map[string]struct{}),
 		currentUser:        "default",
 		hasAuthenticated:   true,

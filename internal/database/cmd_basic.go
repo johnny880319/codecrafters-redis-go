@@ -60,6 +60,7 @@ func (c *client) cmdSet(args []string) []byte {
 		vType:     StringType,
 		expiresAt: expiresAt,
 	}
+	c.db.versions[key]++
 	return simpleString("OK")
 }
 
@@ -133,6 +134,7 @@ func (c *client) cmdIncr(args []string) []byte {
 	contentInt++
 	entry.value = strconv.Itoa(contentInt)
 	c.db.data[key] = entry
+	c.db.versions[key]++
 	return respInteger(contentInt)
 }
 

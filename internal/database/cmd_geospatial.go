@@ -55,6 +55,7 @@ func (c *client) cmdGeoadd(args []string) []byte {
 	content[member] = encodeGeohash(longitude, latitude)
 	entry.value = content
 	c.db.data[key] = entry
+	c.db.versions[key]++
 
 	return respInteger(returnVal)
 }

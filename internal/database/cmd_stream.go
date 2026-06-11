@@ -43,6 +43,7 @@ func (c *client) cmdXadd(args []string) []byte {
 	content = append(content, newEntry)
 	entry.value = content
 	c.db.data[key] = entry
+	c.db.versions[key]++
 
 	c.db.notifyWaiters(key)
 	return bulkString(id, true)

@@ -42,6 +42,7 @@ func (c *client) cmdZadd(args []string) []byte {
 	content[member] = score
 	entry.value = content
 	c.db.data[key] = entry
+	c.db.versions[key]++
 
 	return respInteger(returnVal)
 }
@@ -195,6 +196,7 @@ func (c *client) cmdZrem(args []string) []byte {
 	delete(content, member)
 	entry.value = content
 	c.db.data[key] = entry
+	c.db.versions[key]++
 
 	return respInteger(1)
 }

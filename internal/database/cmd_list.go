@@ -31,6 +31,7 @@ func (c *client) cmdRpush(args []string) []byte {
 	content = append(content, values...)
 	entry.value = content
 	c.db.data[key] = entry
+	c.db.versions[key]++
 	newLen := len(content)
 
 	if waiters, hasWaiters := c.db.waiters[key]; hasWaiters {
@@ -78,6 +79,7 @@ func (c *client) cmdLpush(args []string) []byte {
 	content = slices.Insert(content, 0, values...)
 	entry.value = content
 	c.db.data[key] = entry
+	c.db.versions[key]++
 	newLen := len(content)
 
 	if waiters, hasWaiters := c.db.waiters[key]; hasWaiters {
@@ -132,6 +134,7 @@ func (c *client) cmdLpop(args []string) []byte {
 	values := content[:count]
 	entry.value = content[count:] // remove popped elements
 	c.db.data[key] = entry
+	c.db.versions[key]++
 
 	bytesValues := make([][]byte, len(values))
 	for i, v := range values {
