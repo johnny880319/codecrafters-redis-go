@@ -3,7 +3,6 @@ package database
 import (
 	"math"
 	"strconv"
-	"time"
 )
 
 const (
@@ -35,16 +34,9 @@ func (c *client) cmdGeoadd(args []string) []byte {
 		return simpleError(redisErr, "invalid longitude or latitude value")
 	}
 
-	content, entry, exists, err := c.db.getSortedSetEntry(key)
+	content, entry, _, err := c.db.getSortedSetEntry(key)
 	if err != nil {
 		return simpleError(redisErr, err.Error())
-	}
-	if !exists {
-		entry = dbEntry{
-			value:     make(map[string]float64),
-			vType:     SortedSetType,
-			expiresAt: time.Time{},
-		}
 	}
 
 	returnVal := 1
@@ -53,10 +45,7 @@ func (c *client) cmdGeoadd(args []string) []byte {
 	}
 
 	content[member] = encodeGeohash(longitude, latitude)
-	entry.value = content
-	c.db.data[key] = entry
-	c.db.versions[key]++
-
+	c.db.setSortedSetEntry(key, content, entry.expiresAt)
 	return respInteger(returnVal)
 }
 

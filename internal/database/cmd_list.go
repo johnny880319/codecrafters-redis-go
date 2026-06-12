@@ -16,22 +16,13 @@ func (c *client) cmdRpush(args []string) []byte {
 	key := args[0]
 	values := args[1:]
 
-	content, entry, exists, err := c.db.getListEntry(key)
+	content, entry, _, err := c.db.getListEntry(key)
 	if err != nil {
 		return simpleError(redisErr, err.Error())
 	}
-	if !exists {
-		entry = dbEntry{
-			value:     []string{},
-			vType:     ListType,
-			expiresAt: time.Time{},
-		}
-	}
 
 	content = append(content, values...)
-	entry.value = content
-	c.db.data[key] = entry
-	c.db.versions[key]++
+	c.db.setListEntry(key, content, entry.expiresAt)
 	newLen := len(content)
 
 	if waiters, hasWaiters := c.db.waiters[key]; hasWaiters {
@@ -45,8 +36,7 @@ func (c *client) cmdRpush(args []string) []byte {
 		} else {
 			c.db.waiters[key] = waiters
 		}
-		entry.value = content
-		c.db.data[key] = entry
+		c.db.setListEntry(key, content, entry.expiresAt)
 	}
 
 	return respInteger(newLen)
@@ -62,24 +52,16 @@ func (c *client) cmdLpush(args []string) []byte {
 	key := args[0]
 	values := args[1:]
 
-	content, entry, exists, err := c.db.getListEntry(key)
+	content, entry, _, err := c.db.getListEntry(key)
 	if err != nil {
 		return simpleError(redisErr, err.Error())
-	}
-	if !exists {
-		entry = dbEntry{
-			value:     []string{},
-			vType:     ListType,
-			expiresAt: time.Time{},
-		}
 	}
 
 	// reverse values before prepending
 	slices.Reverse(values)
 	content = slices.Insert(content, 0, values...)
-	entry.value = content
-	c.db.data[key] = entry
-	c.db.versions[key]++
+	c.db.setListEntry(key, content, entry.expiresAt)
+
 	newLen := len(content)
 
 	if waiters, hasWaiters := c.db.waiters[key]; hasWaiters {
@@ -94,8 +76,7 @@ func (c *client) cmdLpush(args []string) []byte {
 		} else {
 			c.db.waiters[key] = waiters
 		}
-		entry.value = values
-		c.db.data[key] = entry
+		c.db.setListEntry(key, values, entry.expiresAt)
 	}
 
 	return respInteger(newLen)
@@ -119,10 +100,8 @@ func (c *client) cmdLpop(args []string) []byte {
 	}
 
 	if len(args) == 1 {
-		value := content[0]
-		entry.value = content[1:] // remove first element
-		c.db.data[key] = entry
-		return bulkString(value, true)
+		c.db.setListEntry(key, content[1:], entry.expiresAt) // remove first element
+		return bulkString(content[0], true)
 	}
 
 	count, err := strconv.Atoi(args[1])
@@ -131,11 +110,9 @@ func (c *client) cmdLpop(args []string) []byte {
 	}
 	count = min(count, len(content))
 
-	values := content[:count]
-	entry.value = content[count:] // remove popped elements
-	c.db.data[key] = entry
-	c.db.versions[key]++
+	c.db.setListEntry(key, content[count:], entry.expiresAt) // remove popped elements
 
+	values := content[:count]
 	bytesValues := make([][]byte, len(values))
 	for i, v := range values {
 		bytesValues[i] = bulkString(v, true)

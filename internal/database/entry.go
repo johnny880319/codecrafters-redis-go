@@ -83,3 +83,39 @@ func (db *Database) getSortedSetEntry(key string) (map[string]float64, dbEntry, 
 	}
 	return make(map[string]float64), dbEntry{}, false, fmt.Errorf("wrong type of value for key '%s'", key)
 }
+
+func (db *Database) setStringEntry(key string, value string, expiresAt time.Time) {
+	db.data[key] = dbEntry{
+		value:     value,
+		vType:     StringType,
+		expiresAt: expiresAt,
+	}
+	db.versions[key]++
+}
+
+func (db *Database) setListEntry(key string, value []string, expiresAt time.Time) {
+	db.data[key] = dbEntry{
+		value:     value,
+		vType:     ListType,
+		expiresAt: expiresAt,
+	}
+	db.versions[key]++
+}
+
+func (db *Database) setStreamEntry(key string, value []map[string]string, expiresAt time.Time) {
+	db.data[key] = dbEntry{
+		value:     value,
+		vType:     StreamType,
+		expiresAt: expiresAt,
+	}
+	db.versions[key]++
+}
+
+func (db *Database) setSortedSetEntry(key string, value map[string]float64, expiresAt time.Time) {
+	db.data[key] = dbEntry{
+		value:     value,
+		vType:     SortedSetType,
+		expiresAt: expiresAt,
+	}
+	db.versions[key]++
+}

@@ -18,16 +18,9 @@ func (c *client) cmdXadd(args []string) []byte {
 	id := args[1]
 	fields := args[2:]
 
-	content, entry, exists, err := c.db.getStreamEntry(key)
+	content, entry, _, err := c.db.getStreamEntry(key)
 	if err != nil {
 		return simpleError(redisErr, err.Error())
-	}
-	if !exists {
-		entry = dbEntry{
-			value:     []map[string]string{},
-			vType:     StreamType,
-			expiresAt: time.Time{},
-		}
 	}
 
 	id, errMsg := handleXaddId(id, content)
@@ -35,16 +28,14 @@ func (c *client) cmdXadd(args []string) []byte {
 		return simpleError(redisErr, errMsg)
 	}
 
-	newEntry := make(map[string]string)
-	newEntry["id"] = id
+	newContent := make(map[string]string)
+	newContent["id"] = id
 	for i := 0; i < len(fields); i += 2 {
-		newEntry[fields[i]] = fields[i+1]
+		newContent[fields[i]] = fields[i+1]
 	}
-	content = append(content, newEntry)
-	entry.value = content
-	c.db.data[key] = entry
-	c.db.versions[key]++
+	content = append(content, newContent)
 
+	c.db.setStreamEntry(key, content, entry.expiresAt)
 	c.db.notifyWaiters(key)
 	return bulkString(id, true)
 }
