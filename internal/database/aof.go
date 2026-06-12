@@ -141,6 +141,9 @@ func (db *Database) replayAOF(appendOnlyPath string) (err error) {
 }
 
 func (c *client) appendAOF(originalCommands []byte) error {
+	if len(originalCommands) == 0 {
+		return nil
+	}
 	if c.db.config.Appendonly != "yes" {
 		return nil
 	}

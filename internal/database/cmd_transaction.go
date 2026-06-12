@@ -21,6 +21,7 @@ func (c *client) cmdExec(args []string) []byte {
 
 	for key, watchedVersion := range c.watchedVersion {
 		c.db.rwMu.Lock()
+		_, _ = c.db.getEntry(key) // update version for the key if expired
 		currentVersion := c.db.versions[key]
 		c.db.rwMu.Unlock()
 		if watchedVersion != currentVersion {
@@ -63,6 +64,7 @@ func (c *client) cmdWatch(args []string) []byte {
 	}
 
 	for _, key := range args {
+		_, _ = c.db.getEntry(key) // update version for the key if expired
 		c.watchedVersion[key] = c.db.versions[key]
 	}
 	return simpleString("OK")

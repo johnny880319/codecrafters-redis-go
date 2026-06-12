@@ -18,6 +18,7 @@ func (db *Database) getEntry(key string) (dbEntry, bool) {
 	// check if the key has expired
 	if !val.expiresAt.IsZero() && time.Now().After(val.expiresAt) {
 		delete(db.data, key)
+		db.versions[key]++
 		return dbEntry{}, false
 	}
 	return val, true

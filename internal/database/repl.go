@@ -181,6 +181,10 @@ func (c *client) finalizeConnection() error {
 }
 
 func (c *client) propagateToReplicas(originalCommands []byte) error {
+	if len(originalCommands) == 0 {
+		return nil
+	}
+
 	c.db.rwMu.RLock()
 	replicas := make([]*client, len(c.db.replicas))
 	copy(replicas, c.db.replicas)
