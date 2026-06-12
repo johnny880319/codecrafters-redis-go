@@ -110,6 +110,10 @@ func (c *client) cmdLpop(args []string) []byte {
 	}
 	count = min(count, len(content))
 
+	if count == 0 {
+		return respArray([][]byte{}) // empty array
+	}
+
 	c.db.setListEntry(key, content[count:], entry.expiresAt) // remove popped elements
 
 	values := content[:count]
