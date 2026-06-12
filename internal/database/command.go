@@ -14,7 +14,7 @@ type commandResult struct {
 
 func isMutatingCommand(cmd string) bool {
 	switch strings.ToUpper(cmd) {
-	case "SET", "INCR", "RPUSH", "LPUSH", "LPOP", "XADD", "ZADD", "ZREM", "GEOADD":
+	case "SET", "INCR", "RPUSH", "LPUSH", "LPOP", "BLPOP", "XADD", "ZADD", "ZREM", "GEOADD":
 		return true
 	default:
 		return false

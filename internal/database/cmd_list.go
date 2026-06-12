@@ -137,25 +137,15 @@ func (c *client) cmdBLpop(args []string) []byte {
 		c.db.rwMu.Lock()
 		defer c.db.rwMu.Unlock()
 
-		content, entry, exists, err := c.db.getListEntry(key)
+		content, entry, _, err := c.db.getListEntry(key)
 		if err != nil {
 			response = simpleError(redisErr, err.Error())
 			return
 		}
-		if !exists {
-			entry = dbEntry{
-				value:     []string{},
-				vType:     ListType,
-				expiresAt: time.Time{},
-			}
-			c.db.data[key] = entry
-		}
 
 		if len(content) > 0 {
-			value := content[0]
-			entry.value = content[1:] // remove first element
-			c.db.data[key] = entry
-			response = respArray([][]byte{bulkString(key, true), bulkString(value, true)})
+			c.db.setListEntry(key, content[1:], entry.expiresAt)
+			response = respArray([][]byte{bulkString(key, true), bulkString(content[0], true)})
 			return
 		}
 
