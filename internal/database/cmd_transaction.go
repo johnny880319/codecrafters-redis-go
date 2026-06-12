@@ -19,28 +19,26 @@ func (c *client) cmdExec(args []string) []byte {
 		return simpleError(redisErr, execWithoutMulti)
 	}
 
-	for key, watchedValue := range c.watched {
+	for key, watchedVersion := range c.watchedVersion {
 		c.db.rwMu.Lock()
-		currentValue, _, _, err := c.db.getStringEntry(key)
+		_, _ = c.db.getEntry(key) // update version for the key if expired
+		currentVersion := c.db.versions[key]
 		c.db.rwMu.Unlock()
-		if err != nil {
-			return simpleError(redisErr, err.Error())
-		}
-		if currentValue != watchedValue {
+		if watchedVersion != currentVersion {
 			c.isMulti = false
 			c.cmdQueue = nil
-			c.watched = make(map[string]string)
+			c.watchedVersion = make(map[string]int)
 			return respArray(nil)
 		}
 	}
 
 	responses := make([][]byte, len(c.cmdQueue))
-	for i, command := range c.cmdQueue {
-		responses[i] = c.executeCommand(command)
+	for i, ctx := range c.cmdQueue {
+		responses[i] = c.executeCommand(ctx.command)
 	}
 	c.isMulti = false
 	c.cmdQueue = nil
-	c.watched = make(map[string]string)
+	c.watchedVersion = make(map[string]int)
 	return respArray(responses)
 }
 
@@ -53,23 +51,21 @@ func (c *client) cmdDiscard(args []string) []byte {
 	}
 	c.isMulti = false
 	c.cmdQueue = nil
-	c.watched = make(map[string]string)
+	c.watchedVersion = make(map[string]int)
 	return simpleString("OK")
 }
 
 func (c *client) cmdWatch(args []string) []byte {
+	c.db.rwMu.Lock()
+	defer c.db.rwMu.Unlock()
+
 	if c.isMulti {
 		return simpleError(redisErr, watchInsideMulti)
 	}
 
 	for _, key := range args {
-		c.db.rwMu.Lock()
-		content, _, _, err := c.db.getStringEntry(key)
-		c.db.rwMu.Unlock()
-		if err != nil {
-			return simpleError(redisErr, err.Error())
-		}
-		c.watched[key] = content
+		_, _ = c.db.getEntry(key) // update version for the key if expired
+		c.watchedVersion[key] = c.db.versions[key]
 	}
 	return simpleString("OK")
 }
@@ -78,6 +74,6 @@ func (c *client) cmdUnwatch(args []string) []byte {
 	if len(args) != 0 {
 		return simpleError(redisErr, "usage: UNWATCH")
 	}
-	c.watched = make(map[string]string)
+	c.watchedVersion = make(map[string]int)
 	return simpleString("OK")
 }

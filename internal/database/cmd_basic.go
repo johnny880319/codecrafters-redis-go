@@ -55,11 +55,8 @@ func (c *client) cmdSet(args []string) []byte {
 			return simpleError(redisErr, "invalid expiration option")
 		}
 	}
-	c.db.data[key] = dbEntry{
-		value:     value,
-		vType:     StringType,
-		expiresAt: expiresAt,
-	}
+
+	c.db.setStringEntry(key, value, expiresAt)
 	return simpleString("OK")
 }
 
@@ -115,24 +112,21 @@ func (c *client) cmdIncr(args []string) []byte {
 		return simpleError(redisErr, "usage: INCR <key>")
 	}
 	key := args[0]
-	content, entry, exist, err := c.db.getStringEntry(key)
+	content, entry, exists, err := c.db.getStringEntry(key)
 	if err != nil {
 		return simpleError(redisErr, err.Error())
 	}
-	if !exist {
+	if !exists {
 		content = "0"
-		entry = dbEntry{
-			vType:     StringType,
-			expiresAt: time.Time{},
-		}
 	}
+
 	contentInt, err := strconv.Atoi(content)
 	if err != nil {
 		return simpleError(redisErr, incrValueNotInteger)
 	}
+
 	contentInt++
-	entry.value = strconv.Itoa(contentInt)
-	c.db.data[key] = entry
+	c.db.setStringEntry(key, strconv.Itoa(contentInt), entry.expiresAt)
 	return respInteger(contentInt)
 }
 

@@ -86,7 +86,12 @@ func (c *client) cmdWait(args []string) []byte {
 		return simpleError(redisErr, "invalid timeout value")
 	}
 
-	for _, replica := range c.db.replicas {
+	c.db.rwMu.Lock()
+	replicas := make([]*client, len(c.db.replicas))
+	copy(replicas, c.db.replicas)
+	c.db.rwMu.Unlock()
+
+	for _, replica := range replicas {
 		if _, err := replica.conn.Write(respArray([][]byte{
 			bulkString("REPLCONF", true),
 			bulkString("GETACK", true),
@@ -101,7 +106,7 @@ func (c *client) cmdWait(args []string) []byte {
 
 	for {
 		syncCount := 0
-		for _, replica := range c.db.replicas {
+		for _, replica := range replicas {
 			if replica.replicaOffset >= c.offset {
 				syncCount++
 			}

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"strings"
 	"sync"
 	"time"
 )
@@ -53,6 +52,7 @@ type Database struct {
 	rwMu           sync.RWMutex
 	data           map[string]dbEntry
 	waiters        map[string][]chan string
+	versions       map[string]int
 	replicas       []*client
 	aofFile        *os.File
 	aofMu          sync.Mutex
@@ -63,13 +63,12 @@ type Database struct {
 type client struct {
 	db *Database
 
-	conn          net.Conn
-	offset        int
-	replicaOffset int
-	isMulti       bool
-	// Tracks string snapshots for WATCH; version tracking would detect modify-and-restore cases.
-	watched            map[string]string
-	cmdQueue           [][]string
+	conn               net.Conn
+	offset             int
+	replicaOffset      int
+	isMulti            bool
+	watchedVersion     map[string]int
+	cmdQueue           []commandContext
 	subscribedChannels map[string]struct{}
 	currentUser        string
 	hasAuthenticated   bool
@@ -82,6 +81,7 @@ func NewDatabase(config DBConfig) (*Database, error) {
 		masterReplid:   "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb",
 		waiters:        make(map[string][]chan string),
 		data:           make(map[string]dbEntry),
+		versions:       make(map[string]int),
 		subscribers:    make(map[string]map[*client]struct{}),
 		userProperties: make(map[string]userProperties),
 	}
@@ -98,16 +98,20 @@ func NewDatabase(config DBConfig) (*Database, error) {
 	return db, nil
 }
 
-// RunConnection handles a single client connection, reading commands and writing responses.
-func (db *Database) RunConnection(conn net.Conn) (err error) {
-	client := &client{
+func newClient(db *Database, conn net.Conn) *client {
+	return &client{
 		db:                 db,
 		conn:               conn,
-		watched:            make(map[string]string),
+		watchedVersion:     make(map[string]int),
 		subscribedChannels: make(map[string]struct{}),
 		currentUser:        "default",
-		hasAuthenticated:   false,
+		hasAuthenticated:   true,
 	}
+}
+
+// RunConnection handles a single client connection, reading commands and writing responses.
+func (db *Database) RunConnection(conn net.Conn) (err error) {
+	client := newClient(db, conn)
 	client.checkAuthentication()
 
 	defer func() {
@@ -125,25 +129,24 @@ func (db *Database) RunConnection(conn net.Conn) (err error) {
 			continue
 		}
 
-		response := client.handleCommand(command)
-		if len(response) == 0 {
+		result := client.handleCommand(commandContext{command, originalCommand})
+		if len(result.response) == 0 {
 			continue
 		}
-		if response[0] != '-' {
-			err = client.appendAOF(command, originalCommand)
-			if err != nil {
-				return err
-			}
+
+		err = client.appendAOF(result.applied)
+		if err != nil {
+			return err
 		}
-		_, err = conn.Write(response)
+
+		_, err = conn.Write(result.response)
 		if err != nil {
 			return fmt.Errorf("error writing response: %w", err)
 		}
-		if response[0] != '-' {
-			err = client.propagateToReplicas(command, originalCommand)
-			if err != nil {
-				return err
-			}
+
+		err = client.propagateToReplicas(result.applied)
+		if err != nil {
+			return err
 		}
 	}
 }
@@ -152,12 +155,15 @@ func (c *client) checkAuthentication() {
 	c.db.rwMu.Lock()
 	defer c.db.rwMu.Unlock()
 
+	nopass := false
 	for _, property := range c.db.userProperties[c.currentUser].flags {
 		if property == "nopass" {
-			c.hasAuthenticated = true
+			nopass = true
 			break
 		}
 	}
+
+	c.hasAuthenticated = nopass
 }
 
 func (c *client) finalizeConnection() error {
@@ -174,145 +180,22 @@ func (c *client) finalizeConnection() error {
 	return err
 }
 
-func (c *client) propagateToReplicas(command []string, originalCommand []byte) error {
-	if !isMutatingCommand(command[0]) {
+func (c *client) propagateToReplicas(originalCommands []byte) error {
+	if len(originalCommands) == 0 {
 		return nil
 	}
 
-	for _, replicaClient := range c.db.replicas {
-		_, err := replicaClient.conn.Write(originalCommand)
+	c.db.rwMu.RLock()
+	replicas := make([]*client, len(c.db.replicas))
+	copy(replicas, c.db.replicas)
+	c.db.rwMu.RUnlock()
+
+	for _, replicaClient := range replicas {
+		_, err := replicaClient.conn.Write(originalCommands)
 		if err != nil {
 			return fmt.Errorf("error propagating to replica: %w", err)
 		}
 	}
-	c.offset += len(originalCommand)
+	c.offset += len(originalCommands)
 	return nil
-}
-
-func isMutatingCommand(cmd string) bool {
-	switch strings.ToUpper(cmd) {
-	case "SET", "INCR", "RPUSH", "LPUSH", "LPOP", "XADD", "ZADD", "ZREM", "GEOADD":
-		return true
-	default:
-		return false
-	}
-}
-
-func isSubscribingCommand(cmd string) bool {
-	switch strings.ToUpper(cmd) {
-	case "SUBSCRIBE", "UNSUBSCRIBE", "PSUBSCRIBE", "PUNSUBSCRIBE", "PING", "QUIT":
-		return true
-	default:
-		return false
-	}
-}
-
-func (c *client) handleCommand(command []string) []byte {
-	cmd, args := command[0], command[1:]
-	if !c.hasAuthenticated && strings.ToUpper(cmd) != "AUTH" {
-		return simpleError(redisNoAuth, noAuth)
-	}
-
-	if len(c.subscribedChannels) > 0 && !isSubscribingCommand(cmd) {
-		return simpleError(redisErr, executeInSubscribeModeError(cmd))
-	}
-
-	switch strings.ToUpper(cmd) {
-	case "MULTI":
-		return c.cmdMulti(args)
-	case "EXEC":
-		return c.cmdExec(args)
-	case "DISCARD":
-		return c.cmdDiscard(args)
-	case "WATCH":
-		return c.cmdWatch(args)
-	case "UNWATCH":
-		return c.cmdUnwatch(args)
-	}
-
-	if c.isMulti {
-		c.cmdQueue = append(c.cmdQueue, command)
-		return simpleString("QUEUED")
-	}
-	return c.executeCommand(command)
-}
-
-func (c *client) executeCommand(command []string) []byte {
-	cmd, args := command[0], command[1:]
-	switch strings.ToUpper(cmd) {
-	case "PING":
-		return c.cmdPing(args)
-	case "ECHO":
-		return c.cmdEcho(args)
-	case "SET":
-		return c.cmdSet(args)
-	case "GET":
-		return c.cmdGet(args)
-	case "TYPE":
-		return c.cmdType(args)
-	case "INCR":
-		return c.cmdIncr(args)
-	case "CONFIG":
-		return c.cmdConfig(args)
-	case "KEYS":
-		return c.cmdKeys(args)
-	case "RPUSH":
-		return c.cmdRpush(args)
-	case "LPUSH":
-		return c.cmdLpush(args)
-	case "LPOP":
-		return c.cmdLpop(args)
-	case "BLPOP":
-		return c.cmdBLpop(args)
-	case "LRANGE":
-		return c.cmdLrange(args)
-	case "LLEN":
-		return c.cmdLlen(args)
-	case "XADD":
-		return c.cmdXadd(args)
-	case "XRANGE":
-		return c.cmdXrange(args)
-	case "XREAD":
-		return c.cmdXread(args)
-	case "INFO":
-		return c.cmdInfo(args)
-	case "REPLCONF":
-		return c.cmdReplconf(args)
-	case "PSYNC":
-		return c.cmdPsync(args)
-	case "WAIT":
-		return c.cmdWait(args)
-	case "SUBSCRIBE":
-		return c.cmdSubscribe(args)
-	case "UNSUBSCRIBE":
-		return c.cmdUnsubscribe(args)
-	case "PUBLISH":
-		return c.cmdPublish(args)
-	case "ZADD":
-		return c.cmdZadd(args)
-	case "ZRANK":
-		return c.cmdZrank(args)
-	case "ZRANGE":
-		return c.cmdZrange(args)
-	case "ZCARD":
-		return c.cmdZcard(args)
-	case "ZSCORE":
-		return c.cmdZscore(args)
-	case "ZREM":
-		return c.cmdZrem(args)
-	case "GEOADD":
-		return c.cmdGeoadd(args)
-	case "GEOPOS":
-		return c.cmdGeopos(args)
-	case "GEODIST":
-		return c.cmdGeodist(args)
-	case "GEOSEARCH":
-		return c.cmdGeosearch(args)
-	case "ACL":
-		return c.cmdAcl(args)
-	case "AUTH":
-		return c.cmdAuth(args)
-	default:
-		return []byte("-ERR unknown command\r\n")
-	}
 }

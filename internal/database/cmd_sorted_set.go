@@ -3,7 +3,6 @@ package database
 import (
 	"sort"
 	"strconv"
-	"time"
 )
 
 func (c *client) cmdZadd(args []string) []byte {
@@ -22,16 +21,9 @@ func (c *client) cmdZadd(args []string) []byte {
 		return simpleError(redisErr, "value is not a valid float")
 	}
 
-	content, entry, exists, err := c.db.getSortedSetEntry(key)
+	content, entry, _, err := c.db.getSortedSetEntry(key)
 	if err != nil {
 		return simpleError(redisErr, err.Error())
-	}
-	if !exists {
-		entry = dbEntry{
-			value:     make(map[string]float64),
-			vType:     SortedSetType,
-			expiresAt: time.Time{},
-		}
 	}
 
 	returnVal := 1
@@ -40,9 +32,7 @@ func (c *client) cmdZadd(args []string) []byte {
 	}
 
 	content[member] = score
-	entry.value = content
-	c.db.data[key] = entry
-
+	c.db.setSortedSetEntry(key, content, entry.expiresAt)
 	return respInteger(returnVal)
 }
 
@@ -193,9 +183,7 @@ func (c *client) cmdZrem(args []string) []byte {
 	}
 
 	delete(content, member)
-	entry.value = content
-	c.db.data[key] = entry
-
+	c.db.setSortedSetEntry(key, content, entry.expiresAt)
 	return respInteger(1)
 }
 
